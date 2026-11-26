@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A battery hold no longer charges from the grid** (#1362). During a hold SEM sets the charge source to solar only, then back.
 - 🐛 **Session kWh and cost no longer go negative in Home Assistant statistics** (#1436). Car, charger and battery sessions now say when they start.
 - 🐛 **Heat pump kWh no longer go negative in Home Assistant statistics each sunrise** (#1432). Its day, month and year now say when they reset.
 - 🐛 **An idle load no longer holds back sun it cannot use** (#1434). A heat pump needing 2 kW kept 900 W from the car.

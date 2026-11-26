@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Jeden licznik z dwiema cenami: {meter}",
       "description": "Urządzenia {devices} dzielą licznik {meter}, ale mają różne ceny. Licznik ma jedną cenę, więc SEM używa ceny {used} dla wszystkich. Ustaw wszystkim tę samą cenę w Taryfie urządzenia."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM nie wstrzymuje baterii: ładowałaby się z sieci",
+      "description": "SEM wstrzymuje baterię przez {hold_entity}. W tym trybie falownik ładuje baterię także z sieci, jeśli źródło ładowania {entity_id} na to pozwala; pokazuje „{state}”. SEM nie znalazł tam opcji na pewno bez sieci, więc nie wstrzymuje. Ustaw {entity_id} na opcję, która nigdy nie ładuje z sieci, albo wyłącz Dom jako odbiorca baterii."
     }
   },
   "selector": {

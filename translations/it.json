@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Un contatore con due prezzi: {meter}",
       "description": "I dispositivi {devices} condividono il contatore {meter} ma hanno prezzi diversi. Un contatore ha un solo prezzo, quindi SEM usa il prezzo di {used} per tutti. Date a tutti lo stesso prezzo in Tariffa del dispositivo."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM non trattiene la batteria: si caricherebbe dalla rete",
+      "description": "SEM trattiene la batteria con {hold_entity}. In quella modalità l’inverter carica la batteria anche dalla rete se la sorgente di carica {entity_id} lo consente; mostra “{state}”. SEM non vi ha trovato un’opzione sicuramente senza rete, quindi non trattiene. Imposta {entity_id} su un’opzione che non carica mai dalla rete, o disattiva Casa come destinazione della batteria."
     }
   },
   "selector": {

@@ -74,6 +74,9 @@ KEYED = {
     "raise_battery_operating_mode_unexpected":
         "#1140 sweep: the battery entities the config names (non-persistent, "
         "but an options reload keeps it)",
+    "raise_battery_hold_would_charge":
+        "#1140 sweep: the battery entities the config names (the charge "
+        "select); the hold clears it once the source takes no grid (#1362)",
     "raise_deye_system_work_mode_invalid":
         "#1140 sweep: the battery entities the config names (non-persistent, "
         "but an options reload keeps it)",
@@ -135,6 +138,9 @@ RAISE = {
     "raise_battery_operating_mode_unexpected": ("battery", lambda h, x: (
         ri.raise_battery_operating_mode_unexpected(
             h, x, mode="fully_fed_to_grid", expected="self"))),
+    "raise_battery_hold_would_charge": ("battery", lambda h, x: (
+        ri.raise_battery_hold_would_charge(
+            h, x, hold_entity="select.mode", state="Solar and mains"))),
     "raise_deye_system_work_mode_invalid": ("battery", lambda h, x: (
         ri.raise_deye_system_work_mode_invalid(h, x, reason="r"))),
     "raise_charger_actuation_failed": ("device", lambda h, x: (

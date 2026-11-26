@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Yksi mittari kahdella hinnalla: {meter}",
       "description": "Laitteet {devices} jakavat mittarin {meter}, mutta niillä on eri hinnat. Mittarilla on yksi hinta, joten SEM käyttää laitteen {used} hintaa kaikille. Anna kaikille sama hinta kohdassa Laitteen tariffi."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM ei pidätä akkua: se latautuisi verkosta",
+      "description": "SEM pidättää akun valinnalla {hold_entity}. Siinä tilassa invertteri lataa akkua myös verkosta, jos latauslähde {entity_id} sallii sen; se näyttää ”{state}”. SEM ei löytänyt sieltä vaihtoehtoa, joka varmasti ei käytä verkkoa, joten se ei pidätä. Aseta {entity_id} vaihtoehtoon, joka ei koskaan lataa verkosta, tai kytke pois Talo akun kohteena."
     }
   },
   "selector": {

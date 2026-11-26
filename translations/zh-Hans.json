@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "一个电表两个价格：{meter}",
       "description": "设备 {devices} 共用电表 {meter}，但价格不同。一个电表只有一个价格，因此 SEM 对它们都使用 {used} 的价格。请在“设备电价”中为它们设置相同的价格。"
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM 未保持电池：它会从电网充电",
+      "description": "SEM 通过 {hold_entity} 保持电池。在该模式下，如果充电来源 {entity_id} 允许，逆变器也会从电网给电池充电；它当前显示“{state}”。SEM 在其中找不到确定不使用电网的选项，因此不保持电池。请将 {entity_id} 设为从不从电网充电的选项，或关闭“住宅作为电池去向”。"
     }
   },
   "selector": {

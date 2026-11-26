@@ -248,6 +248,8 @@ _ENTITY_ID_RE = re.compile(
 #: tests/test_831_repair_next_step.py — every anchor must resolve to a real
 #: heading, the #219 lesson shape.
 _DOCS_ANCHORS = {
+    # (#1362) a hold by select would charge the battery from the grid
+    "battery_hold_would_charge": "holding-the-battery-would-charge-it-from-the-grid",
     # (#1417) devices that share one meter carry different prices
     "shared_meter_two_prices": "one-meter-shows-two-prices",
     # (#1369) the tank draws power but does not warm
@@ -783,6 +785,41 @@ def clear_charger_failsafe_suspected(hass: HomeAssistant, device_id: str) -> Non
         ir.async_delete_issue(hass, DOMAIN, _failsafe_issue_id(device_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
+def _hold_charges_issue_id(entity_id: str) -> str:
+    return f"battery_hold_would_charge_{entity_id}"
+
+
+def raise_battery_hold_would_charge(hass: HomeAssistant, entity_id: str, *,
+                                    hold_entity: str, state: str) -> None:
+    """(#1362) SEM holds the battery with a mode select, but the charge
+    source shows an option that lets the inverter charge from the grid in
+    that mode, and no option is surely without the grid. SEM does not hold;
+    the user picks the charge source. Clears itself once a hold can run."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN,
+            issue_id=_hold_charges_issue_id(entity_id),
+            is_fixable=False, is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="battery_hold_would_charge",
+            translation_placeholders={
+                "entity_id": entity_id, "hold_entity": hold_entity,
+                "state": str(state),
+            },
+            learn_more_url=next_step_url(
+                "docs", "battery_hold_would_charge", **_versions(hass)),
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.create failed for %s: %s", entity_id, e)
+
+
+def clear_battery_hold_would_charge(hass: HomeAssistant, entity_id: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _hold_charges_issue_id(entity_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
 def _battery_force_discharge_issue_id(entity_id: str) -> str:
@@ -2006,6 +2043,7 @@ _ORPHAN_SWEPT_ISSUE_IDS = {
         _battery_force_discharge_issue_id,
         _operating_mode_issue_id,
         _work_mode_issue_id,
+        _hold_charges_issue_id,      # (#1362) the charge select
     ),
     "device": (_actuation_issue_id,),
 }

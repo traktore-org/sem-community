@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Un compteur avec deux prix : {meter}",
       "description": "Les appareils {devices} partagent le compteur {meter} mais ont des prix différents. Un compteur a un seul prix, donc SEM utilise le prix de {used} pour tous. Donnez-leur le même prix sous Tarif de l'appareil."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM ne retient pas la batterie : elle se chargerait sur le réseau",
+      "description": "SEM retient la batterie avec {hold_entity}. Dans ce mode, l’onduleur charge aussi la batterie sur le réseau si la source de charge {entity_id} le permet ; elle affiche « {state} ». SEM n’y a trouvé aucune option sûrement sans réseau, il ne retient donc pas. Réglez {entity_id} sur une option qui ne charge jamais sur le réseau, ou désactivez Maison comme puits de batterie."
     }
   },
   "selector": {

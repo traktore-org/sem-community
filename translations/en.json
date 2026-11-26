@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "One meter with two prices: {meter}",
       "description": "The devices {devices} share the meter {meter} but have different prices. One meter has one price, so SEM uses the price of {used} for all of them. Give them all the same price under Device tariff."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM did not hold the battery: it would charge from the grid",
+      "description": "SEM holds the battery with {hold_entity}. In that mode the inverter also charges the battery from the grid when the charge source {entity_id} allows it, and it shows “{state}”. SEM found no option there that surely takes no grid, so it does not hold. Set {entity_id} to an option that never charges from the grid, or turn off House as a battery sink."
     }
   },
   "selector": {

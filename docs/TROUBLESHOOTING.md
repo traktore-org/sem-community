@@ -270,6 +270,14 @@ If the total matches the Energy Dashboard, nothing is wrong.
 
 **Fix:** Devices that name the same own meter (for example a heat pump and a car charger behind one second meter) need the same price. Until then SEM uses the first device's price for all of them. Give every device on that meter the same **Device tariff**.
 
+### Holding the battery would charge it from the grid
+
+**Symptom:** A Repair says SEM did not hold the battery, because the charge source would let the inverter charge from the grid.
+
+**Why:** Some inverters hold the battery with a mode such as "Utility". In that mode they also charge the battery from the grid when the charge source allows it, for example "Solar and mains". During a hold SEM sets the charge source to the option without the grid, such as "Only solar", and puts it back after. If the select has no such option, SEM cannot be sure, so it does not hold.
+
+**Fix:** Set the charge source to an option that never charges from the grid, or turn off **House as a battery sink**.
+
 ### The battery platform is pinned to generic
 
 **Symptom:** A brand battery is loaded, but its controls act crudely. A Repair says the platform is Generic.
@@ -440,6 +448,7 @@ Each Repair is a notice in `Settings › System › Repairs`. The key names the 
 | Repair | What it means and what to do |
 |---|---|
 | `shared_meter_two_prices` | Devices on one meter have different prices. See [One meter shows two prices](#one-meter-shows-two-prices). |
+| `battery_hold_would_charge` | Holding the battery would charge it from the grid. See [Holding the battery would charge it from the grid](#holding-the-battery-would-charge-it-from-the-grid). |
 | `battery_platform_pinned_generic` | The battery platform is Generic on a brand install. See [The battery platform is pinned to generic](#the-battery-platform-is-pinned-to-generic). |
 | `soc_zones_out_of_order` | The battery zones do not rise. See [Your battery SOC zones are out of order](#your-battery-soc-zones-are-out-of-order). |
 | `battery_control_write_not_taken` | The device does not take a value SEM wrote. See [A battery control write is not taken](#a-battery-control-write-is-not-taken). |
