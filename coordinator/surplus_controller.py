@@ -70,7 +70,7 @@ class BatteryTierContext:
 
 
 def tier1_battery_reserved_w(devices, *, below_priority, allowance_w,
-                             exclude_ids=()) -> float:
+                             exclude_ids=(), sun_w=None, pack_w=None) -> float:
     """(#885) Pack watts claimed by Tier-1 loads that OUTRANK a charger.
 
     Rule, 31.08: *"The order tells who is first and gets power from the
@@ -136,17 +136,24 @@ def tier1_battery_reserved_w(devices, *, below_priority, allowance_w,
         allowance_w: The pack's assist cap — the reservation can never
             exceed the whole allowance.
 
+        sun_w: (#1434) The sun a senior could start on this cycle. With it,
+            an idle senior that cannot start on this sun plus the pack left
+            holds nothing back. ``None`` = not known: no start check.
+        pack_w: (#1434) The pack a "Solar + battery" load could take this
+            cycle (its Tier-1 gates). ``0`` = the pack helps no load now, so
+            an idle senior takes nothing from it. ``None`` = not known.
+
     Returns:
         Watts to withhold from this charger, ``0.0`` if nothing outranks it.
     """
     return _reserved_for_seniors(
         devices, below_priority=below_priority, cap_w=allowance_w,
-        axis="battery", exclude_ids=exclude_ids,
+        axis="battery", exclude_ids=exclude_ids, sun_w=sun_w, pack_w=pack_w,
     )
 
 
 def surplus_reserved_w(devices, *, below_priority, available_w,
-                       exclude_ids=()) -> float:
+                       exclude_ids=(), pack_w=None) -> float:
     """(#885) SOLAR watts claimed by loads that OUTRANK a charger.
 
     The battery axis was only half the problem. ``solar_committed_w`` cascades
@@ -168,15 +175,18 @@ def surplus_reserved_w(devices, *, below_priority, available_w,
     there an active load must keep reserving. One walk, two axes, opposite
     rules — stated here because the asymmetry looks like a bug until you know
     which ledger each one is protecting.
+
+    (#1434) ``pack_w`` — the pack a "Solar + battery" senior could add to
+    its start this cycle (see ``tier1_battery_reserved_w``). ``None`` = none.
     """
     return _reserved_for_seniors(
         devices, below_priority=below_priority, cap_w=available_w,
-        axis="solar", exclude_ids=exclude_ids,
+        axis="solar", exclude_ids=exclude_ids, pack_w=pack_w,
     )
 
 
 def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
-                          exclude_ids=()) -> float:
+                          exclude_ids=(), sun_w=None, pack_w=None) -> float:
     """The shared priority walk behind both reservations.
 
     ONE implementation on purpose: two copies of "who outranks this charger"
@@ -209,8 +219,9 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
     if cap <= 0.0:
         return 0.0
 
+    devices = list(devices or ())
     reserved = 0.0
-    for device in devices or ():
+    for device in devices:
         if getattr(device, "device_id", None) in excluded:
             continue
         try:
@@ -219,44 +230,54 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
         except (TypeError, ValueError):
             continue
         active = bool(getattr(device, "is_active", False))
+        if axis == "battery" and not getattr(device, "battery_assist_enabled", False):
+            continue
 
-        if axis == "battery":
-            if not getattr(device, "battery_assist_enabled", False):
+        if active:
+            if axis != "battery":
+                # Solar. An active device is already inside ``home_w`` and
+                # has therefore already shrunk every charger's surplus —
+                # reserving again would double-count it.
                 continue
-            if active:
-                # Running: reserve the MEASURED pack draw, not a rated guess.
-                # 0.0 means the walk funded it from solar — it needs nothing
-                # from the battery and must not hold any back.
-                claim = float(getattr(device, "_tier1_batt_w", 0.0) or 0.0)
-            else:
-                claim = _rated_claim(device)
+            # Running: reserve the MEASURED pack draw, not a rated guess.
+            # 0.0 means the walk funded it from solar — it needs nothing
+            # from the battery and must not hold any back.
+            claim = float(getattr(device, "_tier1_batt_w", 0.0) or 0.0)
         else:
-            # Solar. An active device is already inside ``home_w`` and has
-            # therefore already shrunk every charger's surplus — reserving
-            # again would double-count it.
-            if active:
-                continue
-            # Only a device the allocator would actually switch on competes:
-            # ``peak_only`` never proactively starts, and one that cannot
-            # activate (cap reached, anti-cycle, unmet dependency) is not
-            # about to take anything.
+            # Only a device the allocator would actually switch on competes,
+            # on either axis: ``peak_only`` never proactively starts, and one
+            # that cannot activate (cap reached, paused while away) is not
+            # about to take anything. (#1434: the battery axis skipped this,
+            # so an idle Off load with "Solar + battery" held the pack.)
             mode = getattr(device, "control_mode", None)
             if getattr(mode, "value", mode) != "surplus":
                 continue
             if not _would_start(device):
                 continue
-            claim = _rated_claim(device)
-            # (#1434) Sun it cannot start with is not sun it is about to
+            # (#1434) What it holds back reaches its own start bar: holding
+            # less let a junior take the rest, and the load never started.
+            claim = max(_rated_claim(device), _start_bar(device))
+            # (#1434) Power it cannot start with is not power it is about to
             # take. An idle heat pump that needs 2000 W reserved all 900 W
             # of spare sun, stayed off, and every junior saw 0 W while the
-            # sun went to the grid. Judge the senior on what is left after
-            # the seniors above it: below its start threshold it holds
-            # nothing back — unless its own start delay is already running
-            # (``_surplus_since``), which is the senior "about to start" this
-            # walk exists to protect.
-            left = cap - reserved
-            if (_start_threshold(device) > left
-                    and getattr(device, "_surplus_since", None) is None):
+            # sun went to the grid. Judge the senior the way the load pass
+            # will: on the sun left after the seniors above it, plus what the
+            # running loads below it draw (the load pass adds that back and
+            # sheds them for it), plus the pack it may add, against its start
+            # threshold plus start reserve.
+            freed = _displaced_draw_w(devices, device, excluded)
+            help_w = _pack_help_w(device, pack_w)
+            if axis == "battery":
+                if help_w is not None and help_w <= 0.0:
+                    continue    # it would take nothing from the pack
+                if sun_w is not None:
+                    pack_left = cap - reserved
+                    if help_w is not None:
+                        pack_left = min(pack_left, help_w)
+                    if not _could_start(
+                            device, max(0.0, float(sun_w)) + freed + pack_left):
+                        continue
+            elif not _could_start(device, cap - reserved + freed + (help_w or 0.0)):
                 continue
 
         reserved += max(0.0, claim)
@@ -286,9 +307,9 @@ def _would_start(device) -> bool:
     about the device rather than when real surplus appeared — letting loads
     activate ahead of their own debounce, several times per cycle.
 
-    So: only the two conditions that are genuinely read-only and genuinely
-    mean "not today". Everything else (dependencies, anti-cycle, dwell) is
-    left to the load pass, which is the only place allowed to evaluate them.
+    So: only conditions that are read-only and mean "not now". (#1434) A
+    blocking dependency is one of them; anti-cycle and dwell are short and
+    stay with the load pass, which is the only place allowed to start them.
     Erring toward reserving is the safe direction here — it protects the
     senior device, which is the whole point of the walk.
     """
@@ -296,6 +317,32 @@ def _would_start(device) -> bool:
         return False
     # (#1048) held for a phase over its limit
     if _phase_held(device):
+        return False
+    # (#1434) off for SEM, or behind the operator's relay while it is on
+    if (getattr(device, "is_enabled", True) is False
+            or getattr(device, "locked_by_operator", False) is True):
+        return False
+    # (#1434) at its stop (a tank or room already there), or its own start
+    # would refuse (``start_refusal``: at target, no reading, no season).
+    # The load pass reads the same two each cycle; the hot-water margin
+    # latch they touch gives the same answer when read twice.
+    if getattr(device, "stop_condition_met", False) is True:
+        return False
+    if isinstance(getattr(device, "start_refusal", None), str):
+        return False
+    # (#1434) a dependency that blocks it (``must_inactive`` while the other
+    # load runs) can last all day; counted, it held the sun with no end
+    deps = getattr(device, "_check_dependencies", None)
+    try:
+        if callable(deps) and deps() is False:
+            return False
+    except Exception:  # noqa: BLE001 — unknown is not refused
+        pass
+    # (#1434) paused while the house is away: no run on the sun, unless the
+    # hot-water dump may take it or the too-cold limit heats now
+    if (_away_pauses(device)
+            and getattr(device, "vacation_dhw_surplus", False) is not True
+            and not _away_heats_peek(device)):
         return False
     until = getattr(device, "_external_off_until", None)
     if until is not None:
@@ -315,6 +362,84 @@ def _start_threshold(device) -> float:
     if threshold <= 0.0:
         threshold = float(getattr(device, "rated_power", 0.0) or 0.0)
     return threshold
+
+
+def _start_bar(device) -> float:
+    """(#1434) The load pass's bar for a fresh start: the start threshold
+    plus the start reserve (#688)."""
+    return _start_threshold(device) + max(
+        0.0, _num(getattr(device, "start_reserve_w", 0.0)))
+
+
+def _could_start(device, power_w: float) -> bool:
+    """(#1434) Could this idle device start on ``power_w``? A device whose
+    start delay already runs (``_surplus_since``) passed the bar in the load
+    pass and is about to start: yes."""
+    if getattr(device, "_surplus_since", None) is not None:
+        return True
+    return float(power_w) >= _start_bar(device)
+
+
+def _displaced_draw_w(devices, senior, excluded=frozenset()) -> float:
+    """(#1434) What the running loads ranked below ``senior`` draw. The load
+    pass adds their draw back to its pool and stops them for the senior, so
+    the senior may start on it. Without
+    it a running pool pump below the car hid the sun from a heat pump above
+    the car: the car took it, and the heat pump never started."""
+    try:
+        rank = int(getattr(senior, "priority", 99))
+    except (TypeError, ValueError):
+        return 0.0
+    total = 0.0
+    for d in devices:
+        if d is senior or getattr(d, "device_id", None) in excluded:
+            continue
+        if not getattr(d, "is_active", False):
+            continue
+        try:
+            if int(getattr(d, "priority", 99)) <= rank:
+                continue
+        except (TypeError, ValueError):
+            continue
+        # Only a load the load pass can stop for the senior: a sun run in
+        # Surplus mode, not its own run (Legionella), not held on by its
+        # minimum run. A Peak-only or held one keeps running, and counting
+        # it held the sun for a senior that then could not start.
+        mode = getattr(d, "control_mode", None)
+        if getattr(mode, "value", mode) != "surplus":
+            continue
+        if (getattr(d, "locked_by_operator", False) is True
+                or getattr(d, "runs_without_surplus", False) is True):
+            continue
+        can_stop = getattr(d, "can_deactivate", None)
+        try:
+            if callable(can_stop) and can_stop() is False:
+                continue
+        except Exception:  # noqa: BLE001 — unknown: it may not stop
+            continue
+        draw = getattr(d, "get_current_consumption", None)
+        try:
+            total += max(0.0, float((draw() if callable(draw) else 0.0) or 0.0))
+        except (TypeError, ValueError):
+            continue
+    return total
+
+
+def _pack_help_w(device, pack_w) -> "Optional[float]":
+    """(#1434) The pack this device could add to its start, by the load
+    pass's Tier-1 rules (``_tier1_headroom_w``): "Solar + battery" on, its
+    daily floor not yet met, not on the away sun-only dump. ``None`` = the
+    pack figure is not known. Each senior is judged on the whole figure, so
+    two seniors that share the pack reserve more, never less."""
+    if pack_w is None:
+        return None
+    if not getattr(device, "battery_assist_enabled", False):
+        return 0.0
+    if getattr(device, "daily_targets_met", False) is True:
+        return 0.0
+    if _away_pauses(device):
+        return 0.0
+    return max(0.0, _num(pack_w))
 
 
 def _rated_claim(device) -> float:
@@ -914,6 +1039,18 @@ def _away_heats(device: "ControllableDevice", active: bool) -> bool:
     try:
         return rule(active) is True
     except Exception:  # noqa: BLE001 — an unreadable band heats nothing
+        return False
+
+
+def _away_heats_peek(device: "ControllableDevice") -> bool:
+    """(#1434) ``_away_heats`` for an idle device, read-only (``peek``):
+    the reservation walk only asks."""
+    rule = getattr(device, "comfort_away_heats", None)
+    if not callable(rule):
+        return False
+    try:
+        return rule(False, peek=True) is True
+    except Exception:  # noqa: BLE001 — as the load pass: unreadable heats nothing
         return False
 
 

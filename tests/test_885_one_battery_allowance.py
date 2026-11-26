@@ -730,20 +730,23 @@ class TestAChargerIsNeverReservedForAsALoad:
         )
 
     def test_a_charger_would_eat_the_whole_allowance(self):
-        # (#1434) min_w 400: a senior is judged on whether it could start on
-        # what is left, so the hazard is shown with a charger that could.
-        charger = _load(3, rated=4140.0, min_w=400.0, name="keba_fa87f74cd3")
+        # (#1434) min_w 100: a senior is judged on whether it could start on
+        # what is left (175 W here), so the hazard is shown with a charger
+        # that could.
+        charger = _load(3, rated=4140.0, min_w=100.0, name="keba_fa87f74cd3")
         loads = [_load(2, rated=1000.0, name="sim_heizband"),
                  _load(5, rated=1083.0, name="heizkoerper_maenner"),
                  _load(5, rated=500.0, name="test_heizband_600")]
         without = self._solar(loads)
-        assert without == 2583.0, "the genuine load reservation"
+        # (#1434) test_heizband_600 is rated 500 W but needs 800 W to start,
+        # so it holds its 800 W start bar: 1000 + 1083 + 800.
+        assert without == 2883.0, "the genuine load reservation"
 
         # charger included -> saturates the cap, junior charger gets nothing
         assert self._solar(loads + [charger]) == 3058.0
         # excluded -> the junior charger keeps its real headroom
         assert self._solar(loads + [charger],
-                           exclude={"keba_fa87f74cd3"}) == 2583.0
+                           exclude={"keba_fa87f74cd3"}) == 2883.0
 
     def test_chargers_are_excluded_on_the_battery_axis_too(self):
         charger = _load(3, tier1=True, rated=4140.0, name="keba_fa87f74cd3")
