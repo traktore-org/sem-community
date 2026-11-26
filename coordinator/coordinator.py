@@ -5569,9 +5569,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # the ceiling on what chargers AND Tier-1 loads may take
                 # between them, and the cap on any single reservation.
                 from .surplus_controller import (
+                    build_senior_view,
                     surplus_reserved_w as _surplus_reserved_w,
                     tier1_battery_reserved_w as _tier1_reserved_w,
                 )
+                from dataclasses import replace as _dc_replace
                 from ..consts.core import (
                     DEFAULT_BATTERY_ASSIST_MAX_POWER as _DEF_ASSIST_MAX,
                 )
@@ -5605,18 +5607,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _solar_headroom_w = max(0.0, float(
                     getattr(power, "solar_power", 0.0) or 0.0)
                     - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
-                # (#1434) The pack a "Solar + battery" load could add to its
-                # start this cycle, before any charger took a share: the
-                # loads' own Tier-1 gates (pack above its floor, sun past the
-                # Solar Gate), read on the same headroom. A senior is held
-                # for only when it could start on sun plus this.
-                _pack_for_loads_w = build_battery_tier_context(
-                    self.config, getattr(power, "battery_soc", None),
-                    _solar_headroom_w,
+                # (#1435) What an idle load ranked above a charger gets in
+                # the load pass, built once: the headroom without the pack's
+                # charge unless the load ranks above a pack that yields it
+                # (#576), the load pass's filter and offset, and (#1434) the
+                # pack a "Solar + battery" load could add to its start,
+                # before any charger took a share — each on the load pass's
+                # own Tier-1 gates.
+                _fs = getattr(self, "_cycle_fleet_state", None)
+                _senior_view = build_senior_view(
+                    self.config,
+                    solar_w=getattr(power, "solar_power", 0.0),
+                    home_w=getattr(power, "home_consumption_power", 0.0),
+                    charge_w=getattr(power, "battery_charge_power", 0.0),
+                    soc=getattr(power, "battery_soc", None),
+                    soc_known=bool(getattr(power, "battery_soc_known", True)),
+                    battery_priority=getattr(_fs, "battery_priority", None),
+                    battery_commanded=bool(getattr(_fs, "battery_commanded", False)),
                     dynamic_floor_pct=(
                         (getattr(self, "_planning_evidence", None) or {})
                         .get("battery_dynamic_floor_pct")),
-                ).assist_budget_w
+                    grid_closed=bool(getattr(
+                        (getattr(self, "_sink_verdicts", None) or {}).get(
+                            "grid_export"), "state", "open") == "closed"),
+                    price_level=getattr(_fs, "tariff_level", None),
+                    controller=_sc,
+                )
+                _pack_for_loads_w = _senior_view.pack_w
+                # (#1435) What each charger took this cycle, by rank: a
+                # senior ranked below it never gets that power.
+                self._charger_takes_per_cycle = []
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -5977,6 +5997,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     available_w=_solar_headroom_w,
                                     exclude_ids=_charger_ids,
                                     pack_w=_pack_for_loads_w,
+                                    senior=_dc_replace(
+                                        _senior_view,
+                                        taken=tuple(self._charger_takes_per_cycle)),
                                 )
                             ),
                             # (#885) One pack, spent in the ONE device
@@ -6002,6 +6025,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     exclude_ids=_charger_ids,
                                     sun_w=_solar_headroom_w,
                                     pack_w=_pack_for_loads_w,
+                                    senior=_dc_replace(
+                                        _senior_view,
+                                        taken=tuple(self._charger_takes_per_cycle)),
                                 )
                             ),
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
@@ -6277,6 +6303,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _pg_reason = yield_override_reason(
                             self, decision, adapter=adapter, power=view.power,
                             yielded=_ylds)
+                        # (#1435) this charger's take, by its rank (below)
+                        _sun_before_w = float(self._solar_committed_w_per_cycle)
+                        _pack_before_w = float(self._assist_committed_w_per_cycle)
                         try:
                             await actuate(
                                 decision, adapter, view.power,
@@ -6370,6 +6399,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                        # (#1435) A load ranked at or below this charger's
+                        # rank was held nothing by its walk: what it took is
+                        # gone before the load pass, for every later walk.
+                        # Read off the two totals, so a failed step above
+                        # still leaves the part that was booked.
+                        self._charger_takes_per_cycle.append((
+                            self._ev_priority_for(cid),
+                            float(self._solar_committed_w_per_cycle) - _sun_before_w,
+                            float(self._assist_committed_w_per_cycle) - _pack_before_w,
+                        ))
                         # (#1381, charger owner S5) the guard's stop of a
                         # yielded charger leaves an owed undo in the ledger:
                         # keep it as this charger's record. Outside the
