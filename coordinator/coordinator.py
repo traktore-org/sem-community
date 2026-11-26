@@ -16,6 +16,7 @@ from .price_view import PriceView  # (#1372)
 from ..utils.device_names import charger_display_name, charger_own_name  # (#1053)
 
 import logging
+import math
 import time
 from types import SimpleNamespace
 from datetime import date, datetime, timedelta
@@ -155,6 +156,21 @@ from ..analytics.energy_assistant import EnergyAssistant
 from .units import finite_float
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def charger_own_session_kwh(hass: Any, sensor_id: Any) -> Optional[float]:
+    """(#135) The charger's own session counter in kWh, for the
+    ``_session_energy_external`` sensor: 0.0 with no counter set up.
+
+    (#641) Wh and MWh counters convert, on the rule the energy path uses.
+    (#1436) None while the counter cannot be read, not 0: the sensor counts
+    up, and Home Assistant takes a fall as a new session, so 0 and back
+    counted the whole session again.
+    """
+    if not sensor_id:
+        return 0.0
+    value = energy_state_to_kwh(hass.states.get(sensor_id), default=None)
+    return round(value, 2) if value is not None else None
 
 
 def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
@@ -4889,6 +4905,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
 
             # Restore EV session state (survives restarts)
             self._restore_ev_session_state()
+            # (#1436) and the battery's, which a restart used to cut to 0
+            self._restore_battery_session_state()
 
             # (#867) Restore the PV monthly history. Degradation compares a
             # month against the same month a year earlier and needs 13 of
@@ -5404,6 +5422,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             # Step 4.5: Battery session tracking. (#1185) The books' watts:
             # its total and its split by source come from the same read.
             self._update_battery_session_tracking(book_power, book_flows)
+            self._save_battery_session_state()   # (#1436)
 
             # Step 4.6: EV taper detection and intelligence (#106)
             ev_intelligence = self._update_ev_intelligence(power, energy)
@@ -7053,11 +7072,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 )
                 # Per-charger session data
                 session = self._session_data_per_charger.get(cid)
+                # (#1436) the start rides with the energy, from one record:
+                # the sensor's last_reset
                 if session:
                     result[f"charger_{cid}_session_energy"] = round(session.energy_kwh, 2)
+                    result[f"charger_{cid}_session_start"] = session.start_time
                     result[f"charger_{cid}_session_solar_share"] = round(session.solar_share_pct, 1)
                 else:
                     result[f"charger_{cid}_session_energy"] = 0.0
+                    result[f"charger_{cid}_session_start"] = None
                     result[f"charger_{cid}_session_solar_share"] = 0.0
                 # #135: pass-through of the charger's own session-energy
                 # sensor (e.g. KEBA's ``sensor.keba_p30_session_energy``).
@@ -7069,15 +7092,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     (c for c in (self.config.get("ev_chargers") or [])
                      if c.get("id") == cid), {}
                 )
-                _ext_sensor_id = _per_charger_cfg.get("ev_session_energy_sensor", "")
-                _ext_value = 0.0
-                if _ext_sensor_id:
-                    # #641 — was Wh-only; MWh counters now convert too, and the
-                    # rule is shared with the rest of the energy path.
-                    _ext_value = energy_state_to_kwh(
-                        self.hass.states.get(_ext_sensor_id), default=0.0,
-                    )
-                result[f"charger_{cid}_session_energy_external"] = round(_ext_value, 2)
+                result[f"charger_{cid}_session_energy_external"] = (
+                    charger_own_session_kwh(
+                        self.hass,
+                        _per_charger_cfg.get("ev_session_energy_sensor", "")))
                 # Per-charger taper detection (#138)
                 taper_det = self._ev_taper_detectors.get(cid)
                 if taper_det:
@@ -17837,6 +17855,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         session.avg_power_w = (session.energy_kwh * 60000) / session.duration_minutes
             except (ValueError, TypeError):
                 pass
+
+    #: (#1436) the battery session's number fields, as saved
+    _BATTERY_SESSION_NUMBERS = (
+        "duration_minutes", "energy_kwh", "solar_energy_kwh",
+        "grid_energy_kwh", "solar_share_pct", "cost", "savings",
+        "avg_power_w",
+    )
+
+    def _save_battery_session_state(self) -> None:
+        """(#1436) Keep the battery session for a restart, as the car's
+        (#282). Lost, a restart cut it to 0 mid-session: the card lost it,
+        and Home Assistant booked the fall as negative use."""
+        if not self._storage:
+            return
+        bs = self._battery_session
+        state = {name: getattr(bs, name) for name in self._BATTERY_SESSION_NUMBERS}
+        state.update(active=bool(bs.active), session_type=bs.session_type,
+                     start_time=bs.start_time)
+        self._storage.set_battery_session_state(state)
+
+    def _restore_battery_session_state(self) -> None:
+        """(#1436) The saved battery session, if it is whole. The idle and
+        flip counts start again: a session idle across the restart ends
+        after its idle cycles, as before."""
+        if not self._storage:
+            return
+        saved = self._storage.get_battery_session_state()
+        kind = saved.get("session_type")
+        start = saved.get("start_time")
+        if kind not in ("charge", "discharge", "idle") or not (
+                start is None or isinstance(start, str)):
+            return
+        numbers = {}
+        for name in self._BATTERY_SESSION_NUMBERS:
+            value = saved.get(name, 0.0)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) \
+                    or not math.isfinite(value):
+                return
+            numbers[name] = float(value)
+        self._battery_session = BatterySessionData(
+            active=saved.get("active") is True, session_type=kind,
+            start_time=start, **numbers)
+        self._battery_session_idle_count = 0
+        self._battery_session_opposite_count = 0
 
     def _restore_ev_session_state(self) -> None:
         """Restore EV session state from storage on startup.

@@ -1755,6 +1755,9 @@ class SEMData:
             "session_energy": self.session.energy_kwh,
             "session_solar_share": self.session.solar_share_pct,
             "session_cost": self.session.cost_chf,
+            # (#1436) when the session began: the energy and cost sensors'
+            # last_reset, from the same record as their value
+            "session_start": self.session.start_time,
             "session_duration": self.session.published()["duration_minutes"],
             "session_solar_energy": self.session.solar_energy_kwh,
             "session_grid_energy": self.session.grid_energy_kwh,
@@ -1769,6 +1772,7 @@ class SEMData:
             "battery_session_cost": self.battery_session.cost,
             # (#829) currency precision, not 17 digits
             "battery_session_savings": round(self.battery_session.savings or 0.0, 2),
+            "battery_session_start": self.battery_session.start_time,  # (#1436)
             "battery_session_duration": self.battery_session.published()["duration_minutes"],
             "battery_session_avg_power": self.battery_session.published()["avg_power_w"],
 
@@ -1785,6 +1789,7 @@ class SEMData:
                 session = self.sessions.get(cid, SessionData())
                 data.update({
                     f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
+                    f"charger_{cid}_session_start": session.start_time,  # (#1436)
                     f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
                     f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
                     f"charger_{cid}_daily_energy": round(
