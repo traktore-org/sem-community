@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Heat pump kWh no longer go negative in Home Assistant statistics each sunrise** (#1432). Its day, month and year now say when they reset.
 - 🐛 **An idle load no longer holds back sun it cannot use** (#1434). A heat pump needing 2 kW kept 900 W from the car.
 - 🐛 **A load holds back sun or battery only when it could start** (#1434). A full tank or an Off load holds nothing.
 
