@@ -52,6 +52,7 @@ from homeassistant.helpers import config_validation as cv, intent
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
 from .coordinator.plan_override import MAX_OVERRIDE_MINUTES
+from .coordinator.units import finite_float
 from .coordinator.decision_log import (
     KIND_BATTERY, KIND_CHARGER, DecisionLog, current)
 from .plain_reasons import DATA_KEY as PLAIN_REASONS_DATA_KEY, plain_sentence
@@ -684,7 +685,7 @@ class SolarSavingsIntent(intent.IntentHandler):
         for key in (sun_key, batt_key):
             state = hass.states.get(f"sensor.sem_{key}")
             try:
-                values.append(float(state.state))
+                values.append(finite_float(state.state))
                 unit = unit or str(state.attributes.get("unit_of_measurement") or "")
             except (AttributeError, TypeError, ValueError):
                 values.append(None)
