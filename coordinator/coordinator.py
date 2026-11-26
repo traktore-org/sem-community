@@ -5581,6 +5581,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 _solar_headroom_w = max(0.0, float(
                     getattr(power, "solar_power", 0.0) or 0.0)
                     - float(getattr(power, "home_consumption_power", 0.0) or 0.0))
+                # (#1434) The pack a "Solar + battery" load could add to its
+                # start this cycle, before any charger took a share: the
+                # loads' own Tier-1 gates (pack above its floor, sun past the
+                # Solar Gate), read on the same headroom. A senior is held
+                # for only when it could start on sun plus this.
+                _pack_for_loads_w = build_battery_tier_context(
+                    self.config, getattr(power, "battery_soc", None),
+                    _solar_headroom_w,
+                    dynamic_floor_pct=(
+                        (getattr(self, "_planning_evidence", None) or {})
+                        .get("battery_dynamic_floor_pct")),
+                ).assist_budget_w
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -5940,6 +5952,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     below_priority=self._ev_priority_for(cid),
                                     available_w=_solar_headroom_w,
                                     exclude_ids=_charger_ids,
+                                    pack_w=_pack_for_loads_w,
                                 )
                             ),
                             # (#885) One pack, spent in the ONE device
@@ -5963,6 +5976,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                     below_priority=self._ev_priority_for(cid),
                                     allowance_w=_assist_allowance_w,
                                     exclude_ids=_charger_ids,
+                                    sun_w=_solar_headroom_w,
+                                    pack_w=_pack_for_loads_w,
                                 )
                             ),
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
