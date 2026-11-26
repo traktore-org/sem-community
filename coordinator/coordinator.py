@@ -158,6 +158,11 @@ from .units import finite_float
 _LOGGER = logging.getLogger(__name__)
 
 
+#: (#405) idle cycles that end a battery session (~3 min at 10 s); (#1436)
+#: a session saved longer ago than that comes back ended
+BATTERY_SESSION_IDLE_CYCLES = 18
+
+
 def charger_own_session_kwh(hass: Any, sensor_id: Any) -> Optional[float]:
     """(#135) The charger's own session counter in kWh, for the
     ``_session_energy_external`` sensor: 0.0 with no counter set up.
@@ -17742,7 +17747,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         rebalanced through 0 W during the sunset transition (#405).
         """
         POWER_THRESHOLD = 200.0
-        IDLE_CYCLES_TO_END = self._BATTERY_SESSION_IDLE_CYCLES
+        IDLE_CYCLES_TO_END = BATTERY_SESSION_IDLE_CYCLES
         OPPOSITE_CYCLES_TO_FLIP = 3
 
         charging = power.battery_charge_power > POWER_THRESHOLD
@@ -17856,8 +17861,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except (ValueError, TypeError):
                 pass
 
-    #: (#405) idle cycles that end a battery session (~3 min at 10 s)
-    _BATTERY_SESSION_IDLE_CYCLES = 18
     #: (#1436) the battery session's number fields, as saved
     _BATTERY_SESSION_NUMBERS = (
         "duration_minutes", "energy_kwh", "solar_energy_kwh",
@@ -17908,7 +17911,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             at = dt_util.parse_datetime(saved_at) if isinstance(saved_at, str) else None
             interval = getattr(getattr(self, "update_interval", None),
                                "total_seconds", lambda: 10.0)()
-            gap = self._BATTERY_SESSION_IDLE_CYCLES * max(float(interval), 1.0)
+            gap = BATTERY_SESSION_IDLE_CYCLES * max(float(interval), 1.0)
             if at is None or at.tzinfo is None or (
                     dt_util.utcnow() - at).total_seconds() > gap:
                 active = False
