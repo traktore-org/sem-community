@@ -41,6 +41,8 @@ or inert" bar the rest of this branch holds to.
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timedelta
 from typing import Optional
 
 import voluptuous as vol
@@ -64,6 +66,11 @@ INTENT_SET_TARGET_SOC = "SemSetChargerTargetSoc"
 INTENT_SKIP_TONIGHT = "SemSkipChargerTonight"
 INTENT_FORCE_CHARGE_NOW = "SemForceChargeNow"
 INTENT_CLEAR_OVERRIDE = "SemClearPlanOverride"
+# (#1431) four more: set the mode, charge until, the peak limit, savings
+INTENT_SET_CHARGE_MODE = "SemSetChargeMode"
+INTENT_CHARGE_NOW_UNTIL = "SemChargeNowUntil"
+INTENT_SET_PEAK_LIMIT = "SemSetPeakLimit"
+INTENT_SOLAR_SAVINGS = "SemSolarSavings"
 
 _NO_ANSWER = "I don't have an answer for that right now."
 _WRITE_REFUSED = ("Voice commands are read-only — turn on \"Voice commands\" "
@@ -442,12 +449,266 @@ class ClearPlanOverrideIntent(intent.IntentHandler):
         return response
 
 
+# ── (#1431) four more ───────────────────────────────────────────────────
+
+#: Spoken / written mode names → the select's four options.
+_MODE_WORDS = {
+    "off": "off", "stop": "off",
+    "sun": "sun", "solar": "sun", "sun only": "sun", "solar only": "sun",
+    "sun + tariff": "sun_tariff", "sun plus tariff": "sun_tariff",
+    "sun and tariff": "sun_tariff", "sun tariff": "sun_tariff",
+    "sun_tariff": "sun_tariff", "sun+tariff": "sun_tariff",
+    "solar + tariff": "sun_tariff", "solar plus tariff": "sun_tariff",
+    "solar and tariff": "sun_tariff", "tariff": "sun_tariff",
+    "now": "now", "full power": "now", "charge now": "now",
+    # the old six names said aloud: passed on as the stored strategy, so the
+    # select's alias path keeps the battery switch exactly as that mode had it
+    "solar only": "solar_only", "only solar": "solar_only",
+    "solar plus battery": "solar_plus_battery", "solar and battery": "solar_plus_battery",
+    "solar + battery": "solar_plus_battery",
+    "solar plus cheapest hours": "solar_plus_cheap", "cheapest hours": "solar_plus_cheap",
+    "solar + cheapest hours": "solar_plus_cheap",
+    "min plus solar": "min_plus_solar", "min + solar": "min_plus_solar",
+    "minimum plus solar": "min_plus_solar",
+    "always max": "always_max", "always maximum": "always_max",
+}
+_MODE_LABEL = {"off": "Off", "sun": "Sun", "sun_tariff": "Sun + tariff", "now": "Now"}
+_WATCH_ONLY = " SEM is in watch-only mode, so nothing is sent to the charger yet."
+_PEAK_RANGE = (1.0, 80.0)
+
+
+def _watch_only_note(coordinator: SEMCoordinator) -> str:
+    """(#1431) A change in watch-only mode is stored but moves nothing."""
+    return _WATCH_ONLY if getattr(coordinator, "_observer_mode", False) else ""
+_FULL_WORDS = {"full", "until full", "the car is full", "100", "100%", "100 percent"}
+_CLOCK = re.compile(
+    r"^\s*(\d{1,2})(?:[:.h](\d{2}))?\s*(?:o'?\s*clock|uhr)?\s*(am|pm|a\.m\.|p\.m\.)?\s*$",
+    re.IGNORECASE)
+#: (#1431) the savings sensors per period, the ones the Insights screen reads
+_SAVINGS = {
+    "today": ("daily_savings", "daily_battery_savings"),
+    "this month": ("monthly_savings", "monthly_battery_savings"),
+    "this year": ("yearly_savings", "yearly_battery_savings"),
+}
+_PERIOD_WORDS = {
+    "today": "today", "day": "today", "this day": "today",
+    "month": "this month", "this month": "this month",
+    "year": "this year", "this year": "this year",
+}
+
+
+def _charge_mode_select(hass: HomeAssistant, charger_id: str):
+    """(#1431) The charger's charge-mode select ENTITY. A voice change goes
+    through its own ``async_select_option`` — the one write path that holds
+    the old-name aliases, the same-mode idempotency, the battery switch and
+    the user's Now (#1381 S9/S11). ``select.select_option`` would refuse an
+    old name such as ``always_max`` before the entity saw it."""
+    component = hass.data.get("entity_components", {}).get("select")
+    if component is None:
+        return None
+    return component.get_entity(f"select.sem_charger_{charger_id}_charge_mode")
+
+
+def minutes_until_clock(text: str, now: datetime) -> Optional[int]:
+    """(#1431) Minutes from ``now`` to the next ``text`` o'clock ("07:00",
+    "7", "7 pm", "19.30"), 1..1440. ``None`` when it is not a clock time."""
+    m = _CLOCK.match(str(text or ""))
+    if not m:
+        return None
+    hour, minute = int(m.group(1)), int(m.group(2) or 0)
+    half = (m.group(3) or "").lower().replace(".", "")
+    if half == "pm" and hour < 12:
+        hour += 12
+    elif half == "am" and hour == 12:
+        hour = 0
+    if hour > 23 or minute > 59:
+        return None
+    end = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if end <= now:
+        end += timedelta(days=1)
+    minutes = int(round((end - now).total_seconds() / 60))
+    return max(1, min(minutes, MAX_OVERRIDE_MINUTES))
+
+
+def _which_charger_or_say(response, coordinator, name) -> Optional[str]:
+    charger_id = _first_charger_id(coordinator, name, write=True)
+    if charger_id is None:
+        response.async_set_speech(
+            "I don't know which charger you mean — say its name."
+            if name or len(coordinator.config.get("ev_chargers") or []) > 1
+            else _NO_ANSWER)
+    return charger_id
+
+
+class SetChargeModeIntent(intent.IntentHandler):
+    """(#1431) "Set the charger to Sun + tariff" — through the select."""
+
+    intent_type = INTENT_SET_CHARGE_MODE
+    description = ("Set an EV charger's charge mode: Off, Sun, Sun + tariff "
+                   "or Now. Optional name picks the charger.")
+    slot_schema = {vol.Optional("name"): cv.string, vol.Required("mode"): cv.string}
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        coordinator = _coordinator_for(intent_obj.hass)
+        if coordinator is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        if not write_intents_enabled(coordinator):
+            response.async_set_speech(_WRITE_REFUSED)
+            return response
+        slots = self.async_validate_slots(intent_obj.slots)
+        mode = _MODE_WORDS.get(str(slots["mode"]["value"]).strip().lower())
+        if mode is None:
+            response.async_set_speech("Say Off, Sun, Sun + tariff or Now.")
+            return response
+        charger_id = _which_charger_or_say(
+            response, coordinator, slots.get("name", {}).get("value"))
+        if charger_id is None:
+            return response
+        entity = _charge_mode_select(intent_obj.hass, charger_id)
+        if entity is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        await entity.async_select_option(mode)
+        from .consts.ev_charge_modes import user_mode_of
+        shown = mode if mode in _MODE_LABEL else user_mode_of(mode)
+        response.response_type = intent.IntentResponseType.ACTION_DONE
+        response.async_set_speech(
+            f"The charger is on {_MODE_LABEL.get(shown, shown)}." + _watch_only_note(coordinator))
+        return response
+
+
+class ChargeNowUntilIntent(intent.IntentHandler):
+    """(#1431) "Charge until 7 o'clock" / "charge until full" — the user's
+    own Now with its end, the same two paths the card's Now uses."""
+
+    intent_type = INTENT_CHARGE_NOW_UNTIL
+    description = ("Charge the EV now at full power until a clock time "
+                   "(for example 07:00) or until the car is full ('full'). "
+                   "Optional name picks the charger.")
+    slot_schema = {vol.Optional("name"): cv.string, vol.Required("until"): cv.string}
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        coordinator = _coordinator_for(intent_obj.hass)
+        if coordinator is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        if not write_intents_enabled(coordinator):
+            response.async_set_speech(_WRITE_REFUSED)
+            return response
+        slots = self.async_validate_slots(intent_obj.slots)
+        until = str(slots["until"]["value"]).strip().lower()
+        charger_id = _which_charger_or_say(
+            response, coordinator, slots.get("name", {}).get("value"))
+        if charger_id is None:
+            return response
+        if until in _FULL_WORDS:
+            entity = _charge_mode_select(intent_obj.hass, charger_id)
+            if entity is None:
+                response.async_set_speech(_NO_ANSWER)
+                return response
+            # the untimed Now, "until full" (#1381 S11) — the select's alias
+            await entity.async_select_option("always_max")
+            response.response_type = intent.IntentResponseType.ACTION_DONE
+            response.async_set_speech(
+                "Charging now, until the car is full." + _watch_only_note(coordinator))
+            return response
+        from homeassistant.util import dt as dt_util
+        minutes = minutes_until_clock(until, dt_util.now())
+        if minutes is None:
+            response.async_set_speech("Say a time, such as 7 o'clock, or say full.")
+            return response
+        coordinator.set_plan_override(
+            charger_id, "force", minutes, user_now=True, fixed_end=True)
+        end = (dt_util.now() + timedelta(minutes=minutes)).strftime("%H:%M")
+        response.response_type = intent.IntentResponseType.ACTION_DONE
+        response.async_set_speech(f"Charging now, until {end}." + _watch_only_note(coordinator))
+        return response
+
+
+class SetPeakLimitIntent(intent.IntentHandler):
+    """(#1431) "Set the peak limit to 3.5 kW" — the ``update_target_peak``
+    action itself, so a voice change and an automation are one path."""
+
+    intent_type = INTENT_SET_PEAK_LIMIT
+    description = "Set SEM's grid peak limit in kW (1 to 80)."
+    slot_schema = {vol.Required("kw"): vol.Coerce(float)}
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        coordinator = _coordinator_for(intent_obj.hass)
+        if coordinator is None:
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        if not write_intents_enabled(coordinator):
+            response.async_set_speech(_WRITE_REFUSED)
+            return response
+        slots = self.async_validate_slots(intent_obj.slots)
+        kw = round(float(slots["kw"]["value"]), 1)
+        if not _PEAK_RANGE[0] <= kw <= _PEAK_RANGE[1]:
+            response.async_set_speech("The peak limit must be between 1 and 80 kW.")
+            return response
+        from homeassistant.exceptions import ServiceNotFound
+        try:
+            await intent_obj.hass.services.async_call(
+                DOMAIN, "update_target_peak", {"target_peak_limit": kw}, blocking=True)
+        except ServiceNotFound:   # SEM half-started: say so, never a stack trace
+            response.async_set_speech(_NO_ANSWER)
+            return response
+        response.response_type = intent.IntentResponseType.ACTION_DONE
+        response.async_set_speech(f"The peak limit is now {kw:g} kW." + (
+            " SEM is in watch-only mode, so it only plans with it."
+            if getattr(coordinator, "_observer_mode", False) else ""))
+        return response
+
+
+class SolarSavingsIntent(intent.IntentHandler):
+    """(#1431) "How much did solar save this month?" — the savings sensors
+    the Insights screen shows: the sun's part plus the battery's."""
+
+    intent_type = INTENT_SOLAR_SAVINGS
+    description = ("Say how much solar and the home battery saved today, "
+                   "this month or this year.")
+    slot_schema = {vol.Optional("period"): cv.string}
+
+    async def async_handle(self, intent_obj: intent.Intent) -> intent.IntentResponse:
+        response = intent_obj.create_response()
+        hass = intent_obj.hass
+        slots = self.async_validate_slots(intent_obj.slots)
+        word = str(slots.get("period", {}).get("value") or "today").strip().lower()
+        period = _PERIOD_WORDS.get(word, "today")
+        sun_key, batt_key = _SAVINGS[period]
+        values, unit = [], ""
+        for key in (sun_key, batt_key):
+            state = hass.states.get(f"sensor.sem_{key}")
+            try:
+                values.append(float(state.state))
+                unit = unit or str(state.attributes.get("unit_of_measurement") or "")
+            except (AttributeError, TypeError, ValueError):
+                values.append(None)
+        sun, batt = values
+        if sun is None and batt is None:
+            response.async_set_speech(f"There is no savings figure for {period} yet.")
+            return response
+        total = (sun or 0.0) + (batt or 0.0)
+        unit = f" {unit}" if unit else ""
+        text = f"Solar saved {total:.2f}{unit} {period}"
+        if batt:
+            text += f", {batt:.2f}{unit} of it through the battery"
+        response.async_set_speech(text + ".")
+        return response
+
+
 EXPLAIN_HANDLERS = (
     WhyBatteryIntent, WhyChargerIntent, TonightCostIntent, GoodToChargeNowIntent,
+    SolarSavingsIntent,
 )
 WRITE_HANDLERS = (
     SetChargerTargetSocIntent, SkipChargerTonightIntent,
     ForceChargeNowIntent, ClearPlanOverrideIntent,
+    SetChargeModeIntent, ChargeNowUntilIntent, SetPeakLimitIntent,
 )
 _HANDLERS = EXPLAIN_HANDLERS + WRITE_HANDLERS
 
