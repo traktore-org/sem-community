@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Um contador com dois preços: {meter}",
       "description": "Os dispositivos {devices} partilham o contador {meter} mas têm preços diferentes. Um contador tem um só preço, por isso o SEM usa o preço de {used} para todos. Dê a todos o mesmo preço em Tarifa do dispositivo."
+    },
+    "battery_hold_would_charge": {
+      "title": "O SEM não retém a bateria: ela carregaria da rede",
+      "description": "O SEM retém a bateria com {hold_entity}. Nesse modo o inversor também carrega a bateria da rede se a fonte de carga {entity_id} o permitir; mostra “{state}”. O SEM não encontrou aí nenhuma opção seguramente sem rede, por isso não retém. Ponha {entity_id} numa opção que nunca carregue da rede, ou desligue Casa como destino da bateria."
     }
   },
   "selector": {

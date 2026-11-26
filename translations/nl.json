@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Eén meter met twee prijzen: {meter}",
       "description": "De apparaten {devices} delen de meter {meter} maar hebben verschillende prijzen. Eén meter heeft één prijs, dus SEM gebruikt de prijs van {used} voor allemaal. Geef ze onder Apparaattarief allemaal dezelfde prijs."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM houdt de batterij niet vast: die zou van het net laden",
+      "description": "SEM houdt de batterij vast met {hold_entity}. In die stand laadt de omvormer de batterij ook van het net als de laadbron {entity_id} dat toestaat; die toont “{state}”. SEM vond daar geen optie die zeker geen net gebruikt, dus houdt hij niet vast. Zet {entity_id} op een optie die nooit van het net laadt, of zet Huis als batterij-afnemer uit."
     }
   },
   "selector": {

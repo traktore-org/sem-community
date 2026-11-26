@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Jeden elektroměr se dvěma cenami: {meter}",
       "description": "Zařízení {devices} sdílejí elektroměr {meter}, ale mají různé ceny. Elektroměr má jednu cenu, proto SEM používá cenu {used} pro všechna. Nastavte všem stejnou cenu v Tarifu zařízení."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM nedrží baterii: nabíjela by se ze sítě",
+      "description": "SEM drží baterii pomocí {hold_entity}. V tomto režimu střídač nabíjí baterii i ze sítě, pokud to zdroj nabíjení {entity_id} dovolí; ukazuje „{state}“. SEM tam nenašel volbu jistě bez sítě, proto nedrží. Nastavte {entity_id} na volbu, která nikdy nenabíjí ze sítě, nebo vypněte Dům jako odběratel baterie."
     }
   },
   "selector": {

@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Egy mérő két árral: {meter}",
       "description": "A(z) {devices} eszközök a(z) {meter} mérőn osztoznak, de eltérő az áruk. Egy mérőnek egy ára van, ezért a SEM a(z) {used} árát használja mindegyikhez. Adj mindegyiknek azonos árat az Eszköz tarifája alatt."
+    },
+    "battery_hold_would_charge": {
+      "title": "A SEM nem tartja vissza az akkut: a hálózatról töltődne",
+      "description": "A SEM a(z) {hold_entity} segítségével tartja vissza az akkut. Ebben a módban az inverter a hálózatról is tölti az akkut, ha a töltési forrás ({entity_id}) engedi; ez most „{state}”. A SEM nem talált ott biztosan hálózat nélküli opciót, ezért nem tartja vissza. Állítsa a(z) {entity_id} értékét olyan opcióra, amely soha nem tölt a hálózatról, vagy kapcsolja ki a Ház mint akkumulátor-nyelő beállítást."
     }
   },
   "selector": {

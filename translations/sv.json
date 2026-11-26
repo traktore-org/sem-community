@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "En mätare med två priser: {meter}",
       "description": "Enheterna {devices} delar mätaren {meter} men har olika priser. En mätare har ett pris, så SEM använder priset för {used} för alla. Ge alla samma pris under Enhetens tariff."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM håller inte batteriet: det skulle laddas från nätet",
+      "description": "SEM håller batteriet med {hold_entity}. I det läget laddar växelriktaren också batteriet från nätet om laddkällan {entity_id} tillåter det; den visar ”{state}”. SEM hittade inget alternativ där som säkert inte använder nätet, så det håller inte. Ställ {entity_id} på ett alternativ som aldrig laddar från nätet, eller stäng av Huset som batterisänka."
     }
   },
   "selector": {

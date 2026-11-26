@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Ein Zähler mit zwei Preisen: {meter}",
       "description": "Die Geräte {devices} teilen den Zähler {meter}, haben aber verschiedene Preise. Ein Zähler hat einen Preis, darum nutzt SEM den Preis von {used} für alle. Gib allen unter Gerätetarif denselben Preis."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM hält die Batterie nicht: sie würde aus dem Netz laden",
+      "description": "SEM hält die Batterie mit {hold_entity}. In diesem Modus lädt der Wechselrichter die Batterie auch aus dem Netz, wenn die Ladequelle {entity_id} das erlaubt; sie zeigt „{state}“. SEM fand dort keine Option, die sicher kein Netz nutzt, und hält deshalb nicht. Stelle {entity_id} auf eine Option, die nie aus dem Netz lädt, oder schalte „Haus als Batterie-Senke“ aus."
     }
   },
   "selector": {

@@ -26,8 +26,10 @@ from homeassistant.util import dt as dt_util
 from ...utils.log_gate import log_on_change
 from ...utils.select_option import listed_option
 from .charge_record import ForcedChargeRecord
+from ...consts.role_lexicon import hold_charge_source
 from .charge_select import (
-    AWAY_FOR_S, SELECT_KEY as CHARGE_SELECT_KEY, SHOW_WITHIN_S, read_select)
+    AWAY_FOR_S, SELECT_KEY as CHARGE_SELECT_KEY, SHOW_WITHIN_S, read_select,
+    select_setup)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,6 +76,17 @@ def hold_setup(config: dict) -> Optional[tuple]:
     if entity == str(config.get(CHARGE_SELECT_KEY) or "").strip():
         return None
     return entity, option
+
+
+def guard_setup(config: dict) -> Optional[tuple]:
+    """(#1362) ``(charge-source select, its grid-charge option)`` when a hold
+    select AND a charge select are both set, else None. The hold mode runs
+    the house from the grid; on many inverters it then also charges the
+    battery from the grid when the charge source allows it, so a hold must
+    keep the charge source on an option without the grid."""
+    if hold_setup(config) is None:
+        return None
+    return select_setup(config)
 
 
 class SelectHold:
@@ -191,11 +204,23 @@ class SelectHold:
             return self._fail(self.refused_text(entity))
         state, options = read_select(self.hass, entity)
         if state is None:
+            if not await self.record.running(entity, self._battery()):
+                await self._unguard()           # never half a hold
             return self._fail(f"{entity} is unavailable — SEM cannot ask it, "
                               "so the battery is not held")
         wanted = listed_option(self.hass, entity, option)
         if wanted not in options:
             return self._fail(f"{entity} does not list '{option}'")
+        if for_charge:
+            # (#1362) a grid charge needs the charge option: the charge
+            # adapter writes it, with the user's own value as its prior
+            await self._unguard()
+        else:
+            blocked = await self._guard(entity)
+            if blocked is not None:
+                if await self.record.running(entity, self._battery()):
+                    await self._release(entity, option, urgent=True)
+                return self._fail(blocked)
         if state == wanted:
             # (#1377) seen once a read SHOW_WITHIN_S after the write still
             # shows it: a cloud select shows a write at once, before a poll
@@ -327,6 +352,7 @@ class SelectHold:
         self.active = False
         await self._send_prior_once(entity)         # (#1377)
         await self.record.left(entity, self._battery())
+        await self._unguard()
         return self._fail(why)
 
     async def _write(self, entity: str, wanted: str, state: str) -> Optional[str]:
@@ -348,6 +374,81 @@ class SelectHold:
         self.active = True
         return None
 
+    async def _guard(self, hold_entity: str) -> Optional[str]:
+        """(#1362) Keep the charge source off the grid for the hold. None:
+        the hold may go on (no charge select, it already shows an option
+        without the grid, or SEM set one). Text: no hold — the select
+        cannot be read, or no option is surely without the grid (a Repair
+        says so, and the user picks the charge source)."""
+        from ..repair_issues import (
+            clear_battery_hold_would_charge, raise_battery_hold_would_charge)
+        g = guard_setup(self.config)
+        if g is None:
+            return None
+        src, charge = g
+        state, options = read_select(self.hass, src)
+        if state is None:
+            return (f"{src} is unavailable — SEM cannot check that the hold "
+                    "takes no grid charge, so the battery is not held")
+        if await self.record.running(src, self._battery()):
+            shown = await self._guard_option(src)
+            if shown is not None and state == shown:
+                return None                     # SEM's guard still shows
+        verdict, target = hold_charge_source(
+            options, state, listed_option(self.hass, src, charge))
+        if verdict == "keep":
+            clear_battery_hold_would_charge(self.hass, src)
+            return None
+        if verdict == "none":
+            raise_battery_hold_would_charge(
+                self.hass, src, hold_entity=hold_entity, state=state)
+            return (f"{src} shows '{state}', which lets the inverter charge "
+                    "from the grid during a hold, and no option is surely "
+                    "without the grid — the battery is not held")
+        clear_battery_hold_would_charge(self.hass, src)
+        if not await self.record.running(src, self._battery()):
+            if not await self.record.started(
+                    src, self._battery(), prior=state, option=target):
+                return "SEM could not save its record"
+        try:
+            await self._select(src, target)
+        except Exception as exc:  # noqa: BLE001
+            if read_select(self.hass, src)[0] != target:
+                await self.record.left(src, self._battery())
+            return f"{src}: write failed: {exc} — the battery is not held"
+        _LOGGER.info("Battery: %s set to '%s' for the hold, so the inverter "
+                     "takes no grid charge; it goes back to '%s' after (#1362)",
+                     src, target, state)
+        return None
+
+    async def _guard_option(self, src: str) -> Optional[str]:
+        for entity, _prior, option in await self.record.select_records(
+                self._battery()):
+            if entity == src:
+                return option
+        return None
+
+    async def _unguard(self) -> None:
+        """(#1362) Put the charge source back to what it showed before the
+        hold — only while it still shows SEM's option: a choice made since
+        is the user's. Never raises."""
+        try:
+            g = guard_setup(self.config)
+            if g is None or not await self.record.running(g[0], self._battery()):
+                return
+            src = g[0]
+            prior = await self.record.prior_of(src)
+            option = await self._guard_option(src)
+            state, options = read_select(self.hass, src)
+            if state is None:
+                return                          # put back when it answers
+            if option is not None and state == option and prior in options:
+                await self._select(src, prior)
+            await self.record.stopped(src)
+        except Exception:  # noqa: BLE001 — a put-back never costs a cycle
+            _LOGGER.debug("charge source not put back after the hold",
+                          exc_info=True)
+
     async def release(self, urgent: bool = True) -> Optional[str]:
         """Put the select back to what it showed before SEM's hold, but only
         while it still shows the hold option: a choice made by hand since is
@@ -361,7 +462,10 @@ class SelectHold:
         if chosen is None:
             return None
         entity, option = chosen
-        return await self._release(entity, option, urgent)
+        err = await self._release(entity, option, urgent)
+        if err is None:
+            await self._unguard()               # mode first, then the source
+        return err
 
     async def _release(self, entity: str, option: str, urgent: bool) -> Optional[str]:
         if not await self.record.running(entity, self._battery()):
@@ -406,6 +510,7 @@ class SelectHold:
         entity, option = chosen
         if not await self.record.running(entity, self._battery()):
             self._adopted = True
+            await self._unguard()               # (#1362) no hold, no guard
             return
         state, _ = read_select(self.hass, entity)
         if state is None:
@@ -424,10 +529,11 @@ class SelectHold:
         if getattr(self, "_orphans_settled", False):
             return
         try:
-            live = (hold_setup(self.config) or ("",))[0]
+            live = {(hold_setup(self.config) or ("",))[0],
+                    (guard_setup(self.config) or ("",))[0]}
             for entity, prior, option in await self.record.select_records(
                     self._battery()):
-                if entity != live and not await self._restore_one(
+                if entity not in live and not await self._restore_one(
                         entity, prior, option, observer):
                     return                      # asked again next cycle
             self._orphans_settled = True

@@ -2164,6 +2164,10 @@
     "shared_meter_two_prices": {
       "title": "Un contor cu două prețuri: {meter}",
       "description": "Dispozitivele {devices} împart contorul {meter}, dar au prețuri diferite. Un contor are un singur preț, așa că SEM folosește prețul lui {used} pentru toate. Dați-le tuturor același preț la Tariful dispozitivului."
+    },
+    "battery_hold_would_charge": {
+      "title": "SEM nu reține bateria: s-ar încărca din rețea",
+      "description": "SEM reține bateria cu {hold_entity}. În acest mod invertorul încarcă bateria și din rețea dacă sursa de încărcare {entity_id} permite; arată „{state}”. SEM nu a găsit acolo nicio opțiune sigur fără rețea, deci nu reține. Setați {entity_id} pe o opțiune care nu încarcă niciodată din rețea sau dezactivați Casa ca destinație a bateriei."
     }
   },
   "selector": {

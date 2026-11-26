@@ -982,6 +982,35 @@ def _hold_option(options) -> str | None:
                  and not _battery_mode(option_tokens(o))), None)
 
 
+def hold_charge_source(options, state: str, charge_option: str) -> tuple:
+    """(#1362) What a charge-source select should show while SEM holds the
+    battery through a mode select. The hold mode runs the house from the
+    grid, and many inverters then also charge the battery from the grid when
+    the charge source allows it — a hold that became a grid charge
+    (26.11.2026: "Utility" + "Solar and mains" charged 13:00–15:00).
+
+    ``("keep", None)``: the option shown takes no grid. ``("set", option)``:
+    show this one during the hold — the one solar-only option. ``("none",
+    None)``: no option is surely without the grid, so SEM must not hold.
+    """
+    opts = [str(o) for o in (options or ()) if str(o).strip()]
+
+    def _no_grid_only(opt: str) -> bool:
+        t = option_tokens(opt)
+        return (t == ["oso"]
+                or ("only" in t and bool(_SOLAR_WORDS & set(t))
+                    and not _GRID_WORDS & set(t)))
+
+    only = [o for o in opts if o != charge_option and _no_grid_only(o)]
+    if len(only) == 1:
+        return ("keep", None) if state == only[0] else ("set", only[0])
+    t = option_tokens(state)
+    if (state != charge_option and t and not (_GRID_WORDS & set(t))
+            and t not in (["snu"], ["usb"], ["sub"])):
+        return ("keep", None)
+    return ("none", None)
+
+
 def option_roles(options, name: str = "") -> Dict[str, str]:
     """(#1362) The option roles a select plays, ``{role: option SEM would
     write}``. Empty for a select that is not one of them. A select that fits
