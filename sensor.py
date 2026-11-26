@@ -2859,6 +2859,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     # state (``_start_told``); set from the restored state when added
     _reset_told = None
     _reset_floor = None
+    _reset_seen = None      # the last start seen in this run
     _attr_should_poll = False
     _attr_has_entity_name = True
 
@@ -4300,31 +4301,48 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     def _start_told(self, start: Optional[datetime]) -> Optional[datetime]:
         """(#1436) The period start to publish as ``last_reset``.
 
-        Home Assistant reads a new ``last_reset`` as a new period from 0. So
-        a start it does not know yet may be published only for a period that
-        began after Home Assistant last saw this sensor: a period that was
-        already running then was counted under the old ``last_reset`` (None
-        from a build without one), and a new start would count it again.
-        That is the upgrade, and also a beta rolled back and then installed
-        again inside the period, when SEM's store still holds the start.
+        Home Assistant reads a new ``last_reset`` as a new period from 0, so
+        a start may be published only in the cycle its period begins. A
+        period already running is counted under the old ``last_reset``: None
+        from a build without one, which is the upgrade, and also a beta
+        rolled back and installed again inside the period (SEM's store still
+        holds the start, Home Assistant forgot it). Its start now would
+        count it again.
 
         ``_reset_told`` is the start Home Assistant has; ``_reset_floor`` is
-        when it last saw a state, both read from the restored state when the
-        sensor is added (``_restore_reset``). A start is taken only when it
-        is later than both: a new period always starts after the last one
-        and after that state. None is never taken: it starts no period, and
-        a start that came back after a None would count its period again.
+        when it last saw a state; both come from the restored state
+        (``_restore_reset``). A start is taken only when it is later than
+        the told one (a new period starts after the last), and when:
+
+        * it moved in this run: SEM saw the period begin;
+        * or Home Assistant has an older start: the period it saw ended,
+          while SEM was down;
+        * or Home Assistant has none, and the start is after its last state:
+          the period began while SEM was down.
+
+        The period start is not when SEM entered it (a polar day row starts
+        at 00:00 of the day before), so the floor is used only for the case
+        that needs it. None is never taken: it starts no period, and a start
+        that came back after a None would count its period again.
         """
         if start is not None and start.tzinfo is None:
             start = start.replace(tzinfo=_local_zone())
         told = self._reset_told
         if start is None or start == told:
             return told
-        floor = self._reset_floor
-        if (told is None or start > told) and (floor is None or start > floor):
+        seen, self._reset_seen = self._reset_seen, start
+        if told is not None and start < told:
+            return told
+        if seen is not None and start != seen:
+            take = True
+        elif told is not None:
+            take = True
+        else:
+            floor = self._reset_floor
+            take = floor is None or start > floor
+        if take:
             self._reset_told = start
-            return start
-        return told
+        return self._reset_told
 
     async def _restore_reset(self) -> None:
         """(#1436) Read the ``last_reset`` Home Assistant has for this sensor,
@@ -4345,6 +4363,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             floor = last.last_updated
         self._reset_told = told
         self._reset_floor = floor if floor is not None else dt_util.utcnow()
+        self._reset_seen = None
 
     def _format_charging_state(self, state: str) -> str:
         """Format charging state to human-readable message (#62).

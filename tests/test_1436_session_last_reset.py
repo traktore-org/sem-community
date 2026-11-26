@@ -239,6 +239,41 @@ async def test_a_period_that_began_while_sem_was_down_is_told():
     assert _read(sensor, "heat_pump_day_start", today) == today
 
 
+async def test_a_start_that_moves_in_this_run_is_told_before_the_floor():
+    """(review) A period start is not when SEM entered it: a polar day row
+    starts at 00:00 of the day before its drop. After a restart inside the
+    day, the next day's start is still before the last state Home Assistant
+    saw — but SEM saw it move, so the period began in this run."""
+    day = datetime(2026, 12, 19, 23, 0, tzinfo=UTC)          # 00:00 local
+    sensor = await _added("heat_pump_energy_today",
+                          _state(5.0, day, day + timedelta(hours=38)))
+    assert _read(sensor, "heat_pump_day_start", day) == day
+    nxt = day + timedelta(days=1)                             # before the floor
+    assert _read(sensor, "heat_pump_day_start", nxt) == nxt
+
+
+async def test_a_newer_start_than_home_assistant_has_is_told_on_the_first_look():
+    """SEM was down when a polar day row rolled: the new start is before
+    the floor, but Home Assistant has the older day's start, so the day it
+    saw has ended and this one counts from 0."""
+    day = datetime(2026, 12, 19, 23, 0, tzinfo=UTC)
+    sensor = await _added("heat_pump_energy_today",
+                          _state(9.0, day, day + timedelta(hours=47)))
+    nxt = day + timedelta(days=1)
+    assert _read(sensor, "heat_pump_day_start", nxt) == nxt
+
+
+async def test_a_restored_unavailable_state_tells_only_a_new_period():
+    """Unavailable at the stop: no attributes, so Home Assistant's start is
+    unknown here. None starts no period, so the running one says None."""
+    gone = State("sensor.sem_session_energy", "unavailable", {},
+                 last_updated=T0)
+    sensor = await _added("session_energy", gone)
+    assert _read(sensor, "session_start", T0 - timedelta(hours=1)) is None
+    later = T0 + timedelta(hours=1)
+    assert _read(sensor, "session_start", later) == later
+
+
 async def test_none_and_older_starts_are_never_told():
     """None starts no period; a start that moved back is no new period.
     After a None the start Home Assistant has stays, so a start that comes
@@ -340,21 +375,53 @@ def _coord(storage) -> SEMCoordinator:
     return coord
 
 
-def test_the_battery_session_survives_a_restart():
-    storage = _storage()
-    before = _coord(storage)
-    before._battery_session = BatterySessionData(
+def _saved_session(storage, gap: timedelta) -> BatterySessionData:
+    """Save an active session, restart ``gap`` later, restore it."""
+    session = BatterySessionData(
         active=True, session_type="discharge",
         start_time="2026-11-26T16:00:00+01:00", duration_minutes=30.0,
         energy_kwh=2.5, savings=0.625, avg_power_w=5000.0)
-    before._save_battery_session_state()
+    before = _coord(storage)
+    before._battery_session = session
+    with freeze_time(T0):
+        before._save_battery_session_state()
     # the store is written as JSON
     storage._daily_data = json.loads(json.dumps(storage._daily_data))
     after = _coord(storage)
-    after._restore_battery_session_state()
-    assert after._battery_session == before._battery_session
+    with freeze_time(T0 + gap):
+        after._restore_battery_session_state()
     assert (after._battery_session_idle_count,
             after._battery_session_opposite_count) == (0, 0)
+    return after._battery_session
+
+
+def test_the_battery_session_survives_a_restart():
+    restored = _saved_session(_storage(), timedelta(seconds=60))
+    assert restored == BatterySessionData(
+        active=True, session_type="discharge",
+        start_time="2026-11-26T16:00:00+01:00", duration_minutes=30.0,
+        energy_kwh=2.5, savings=0.625, avg_power_w=5000.0)
+
+
+def test_a_session_saved_before_a_long_outage_comes_back_ended():
+    """SEM did not see the battery while down: the session cannot go on,
+    or its duration and average power would count the outage. Its figures
+    and start stay, so the value does not fall."""
+    restored = _saved_session(_storage(), timedelta(hours=6))
+    assert restored.active is False
+    assert (restored.energy_kwh, restored.start_time, restored.avg_power_w) \
+        == (2.5, "2026-11-26T16:00:00+01:00", 5000.0)
+
+
+def test_an_active_record_with_no_save_time_comes_back_ended():
+    storage = _storage()
+    storage._daily_data["battery_session"] = {
+        "active": True, "session_type": "charge",
+        "start_time": "2026-11-26T10:00:00+01:00", "energy_kwh": 1.0}
+    coord = _coord(storage)
+    coord._restore_battery_session_state()
+    assert coord._battery_session.active is False
+    assert coord._battery_session.energy_kwh == 1.0
 
 
 @pytest.mark.parametrize("broken", [

@@ -17742,7 +17742,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         rebalanced through 0 W during the sunset transition (#405).
         """
         POWER_THRESHOLD = 200.0
-        IDLE_CYCLES_TO_END = 18
+        IDLE_CYCLES_TO_END = self._BATTERY_SESSION_IDLE_CYCLES
         OPPOSITE_CYCLES_TO_FLIP = 3
 
         charging = power.battery_charge_power > POWER_THRESHOLD
@@ -17856,6 +17856,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             except (ValueError, TypeError):
                 pass
 
+    #: (#405) idle cycles that end a battery session (~3 min at 10 s)
+    _BATTERY_SESSION_IDLE_CYCLES = 18
     #: (#1436) the battery session's number fields, as saved
     _BATTERY_SESSION_NUMBERS = (
         "duration_minutes", "energy_kwh", "solar_energy_kwh",
@@ -17872,13 +17874,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         bs = self._battery_session
         state = {name: getattr(bs, name) for name in self._BATTERY_SESSION_NUMBERS}
         state.update(active=bool(bs.active), session_type=bs.session_type,
-                     start_time=bs.start_time)
+                     start_time=bs.start_time,
+                     saved_at=dt_util.utcnow().isoformat())
         self._storage.set_battery_session_state(state)
 
     def _restore_battery_session_state(self) -> None:
         """(#1436) The saved battery session, if it is whole. The idle and
         flip counts start again: a session idle across the restart ends
-        after its idle cycles, as before."""
+        after its idle cycles, as before.
+
+        A session saved longer ago than those idle cycles comes back ended:
+        SEM did not see the battery while it was down, so the session cannot
+        go on, and its duration and average power would count the outage.
+        Its figures stay for display; the next session starts anew."""
         if not self._storage:
             return
         saved = self._storage.get_battery_session_state()
@@ -17894,9 +17902,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     or not math.isfinite(value):
                 return
             numbers[name] = float(value)
+        active = saved.get("active") is True
+        if active:
+            saved_at = saved.get("saved_at")
+            at = dt_util.parse_datetime(saved_at) if isinstance(saved_at, str) else None
+            interval = getattr(getattr(self, "update_interval", None),
+                               "total_seconds", lambda: 10.0)()
+            gap = self._BATTERY_SESSION_IDLE_CYCLES * max(float(interval), 1.0)
+            if at is None or at.tzinfo is None or (
+                    dt_util.utcnow() - at).total_seconds() > gap:
+                active = False
         self._battery_session = BatterySessionData(
-            active=saved.get("active") is True, session_type=kind,
-            start_time=start, **numbers)
+            active=active, session_type=kind, start_time=start, **numbers)
         self._battery_session_idle_count = 0
         self._battery_session_opposite_count = 0
 
