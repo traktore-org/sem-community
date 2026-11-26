@@ -165,7 +165,8 @@ def test_every_plan_ledger_in_the_coordinator_reads_the_switch():
     for c in calls:
         kw = {k.arg: k for k in c.keywords}
         assert "house_sink_enabled" in kw, f"line {c.lineno}: no house_sink_enabled"
-        assert ast.unparse(kw["house_sink_enabled"].value) == "plan_house_sink(self.config)"
+        assert ast.unparse(kw["house_sink_enabled"].value) == (
+            "plan_house_sink(self.config, getattr(self, '_battery_adapters', None))")
 
 
 # ── the cover and the loads under the hold ───────────────────────────────
@@ -237,6 +238,58 @@ def test_the_plan_keeps_the_pack_only_where_every_mode_reaches_the_hold(cfg, wan
     """``decide_battery`` returns for "off" and the manual modes before the
     house sink: those packs are not held live."""
     assert plan_house_sink(cfg) is want
+
+
+class _Ctl:
+    """A battery control as ``discharge_limit_gap`` answers for 0 W."""
+
+    def __init__(self, gap=None, boom=False):
+        self.gap, self.boom = gap, boom
+
+    def discharge_limit_gap(self, watts):
+        assert watts == 0.0
+        if self.boom:
+            raise RuntimeError("cannot say")
+        return self.gap
+
+
+@pytest.mark.parametrize("adapters,want", [
+    (None, True),                       # none built yet: as the switch says
+    ({}, True),
+    ({"b1": _Ctl(), "b2": _Ctl()}, True),
+    # the report: a hold select on both packs answers no gap at 0 W
+    ({"b1": _Ctl(None), "b2": _Ctl(None)}, True),
+    # #1427: one pack with no way to cap is not held live
+    ({"b1": _Ctl(), "b2": _Ctl("no discharge-limit entity set")}, False),
+    ({"b1": _Ctl("hold refused lately")}, False),
+    ({"b1": _Ctl(boom=True)}, False),
+    ({"b1": object()}, True),           # a control with no such question
+])
+def test_the_plan_keeps_only_packs_sem_can_hold(adapters, want):
+    """Live, a 0 W limit on a pack with no control caps nothing (#1427):
+    the inverter covers the house. The plan does not keep such a pack."""
+    assert plan_house_sink({"battery_house_sink_enabled": True}, adapters) is want
+
+
+def test_the_real_generic_adapter_answers_for_the_report():
+    """The reporter's control: no limit number, a hold select with an
+    option. The real ``GenericBatteryAdapter`` says it can hold at 0 W, and
+    without the hold pair it cannot."""
+    from types import SimpleNamespace as NS
+
+    from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
+        GenericBatteryAdapter,
+    )
+    hass = MagicMock()
+    hass.states.get = lambda eid: NS(state="SBU", attributes={
+        "options": ["Utility", "Solar", "SBU"]})
+    held = GenericBatteryAdapter(hass, {
+        "battery_hold_select_entity": "select.output_source_priority",
+        "battery_hold_select_option": "Utility"})
+    bare = GenericBatteryAdapter(hass, {})
+    on = {"battery_house_sink_enabled": True}
+    assert plan_house_sink(on, {"b1": held, "b2": held}) is True
+    assert plan_house_sink(on, {"b1": held, "b2": bare}) is False
 
 
 def test_turning_the_switch_is_a_new_night():

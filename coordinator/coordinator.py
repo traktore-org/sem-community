@@ -13619,7 +13619,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # 7. (#1362) "keep the battery in cheap hours" moves the battery's
         #    path through the night: turning it on or off is a new night
         from .sink_verdicts import plan_house_sink
-        sig.append(("keep_pack", plan_house_sink(self.config)))
+        sig.append(("keep_pack", plan_house_sink(
+            self.config, getattr(self, "_battery_adapters", None))))
         return tuple(sig)
 
     def _energy_plan_load_windows(self, devices) -> dict:
@@ -14257,7 +14258,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     max_discharge_w=_md_w, peak_limit_w=_peak_w,
                     capacity_kwh=cap_kwh2,
                     # (#1362) the live hold's WHEN, as tonight's plan reads it
-                    house_sink_enabled=plan_house_sink(self.config))
+                    house_sink_enabled=plan_house_sink(
+                        self.config, getattr(self, "_battery_adapters", None)))
                 plan2 = pack_night(
                     demands2, ledger2, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w)
@@ -15308,7 +15310,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # (#1362) "keep the battery in cheap hours": the live hold
                 # keeps the pack there, so the walk does too — the card
                 # showed the battery feeding the house while SEM held it
-                house_sink_enabled=plan_house_sink(self.config))
+                house_sink_enabled=plan_house_sink(
+                    self.config, getattr(self, "_battery_adapters", None)))
             # ── Arbitrage advice (#638, the last string) ────────────────
             # The advisor reads the SAME walked ledger the pack consumes
             # — prices on both horizons, the home's hour-by-hour grid
