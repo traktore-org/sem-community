@@ -13616,6 +13616,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             )))
         except Exception:  # noqa: BLE001 — no tariff is a valid shape
             sig.append(("price", ()))
+        # 7. (#1362) "keep the battery in cheap hours" moves the battery's
+        #    path through the night: turning it on or off is a new night
+        from .sink_verdicts import plan_house_sink
+        sig.append(("keep_pack", plan_house_sink(self.config)))
         return tuple(sig)
 
     def _energy_plan_load_windows(self, devices) -> dict:
@@ -14202,6 +14206,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                                          provisional_soc_curve)
                 from .energy_planner import (Demand, battery_at_end,
                                                 build_night_ledger, pack_night)
+                from .sink_verdicts import plan_house_sink
                 slots2 = build_day_slots(
                     start=day_start, end=day_end, day_kwh=day_kwh,
                     sunrise=sunrise, sunset=sunset,
@@ -14250,7 +14255,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 ledger2 = build_night_ledger(
                     slots2, soc_kwh=soc_seed, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w,
-                    capacity_kwh=cap_kwh2)
+                    capacity_kwh=cap_kwh2,
+                    # (#1362) the live hold's WHEN, as tonight's plan reads it
+                    house_sink_enabled=plan_house_sink(self.config))
                 plan2 = pack_night(
                     demands2, ledger2, floor_kwh=_floor2,
                     max_discharge_w=_md_w, peak_limit_w=_peak_w)
@@ -14510,6 +14517,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 Demand, LedgerSlot, battery_at_end, build_night_ledger, demand_why,
                 pack_night,
             )
+            from .sink_verdicts import plan_house_sink
             from .ev_night_targets import build_night_target_map
             from .ev_tariff_planner import (
                 night_charge_end, resolve_deadline)
@@ -15296,7 +15304,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             ledger = build_night_ledger(
                 slots, soc_kwh=soc_kwh, floor_kwh=floor_kwh,
                 max_discharge_w=max_discharge_w, peak_limit_w=peak_w,
-                capacity_kwh=cap_kwh)
+                capacity_kwh=cap_kwh,
+                # (#1362) "keep the battery in cheap hours": the live hold
+                # keeps the pack there, so the walk does too — the card
+                # showed the battery feeding the house while SEM held it
+                house_sink_enabled=plan_house_sink(self.config))
             # ── Arbitrage advice (#638, the last string) ────────────────
             # The advisor reads the SAME walked ledger the pack consumes
             # — prices on both horizons, the home's hour-by-hour grid
