@@ -42,13 +42,29 @@ def ev_reclaims_battery_charge(
     the floor, below the battery, or while the battery is commanded → the
     battery keeps its charge (today's behaviour).
     """
-    if battery_commanded:
-        return False
-    if battery_priority is None:
-        return False
-    if soc < priority_soc:
+    if not pack_yields_charge(soc=soc, priority_soc=priority_soc,
+                              battery_priority=battery_priority,
+                              battery_commanded=battery_commanded):
         return False
     return ev_priority < battery_priority
+
+
+def pack_yields_charge(
+    *,
+    soc: Optional[float],
+    priority_soc: float,
+    battery_priority: Optional[int],
+    battery_commanded: bool,
+) -> bool:
+    """(#1435) Does the pack give its charge power to a device ranked above
+    it? The pack's half of ``ev_reclaims_battery_charge``: not commanded, in
+    the priority list, SOC read and at or above the reserve floor. A device
+    gets the charge when this holds AND it ranks above the pack."""
+    if battery_commanded:
+        return False
+    if battery_priority is None or soc is None:
+        return False
+    return soc >= priority_soc
 
 
 def reclaimable_battery_w(
