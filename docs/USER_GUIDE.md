@@ -667,7 +667,8 @@ Each hint is one message. Automations can use the event
 - Changes (need Voice commands on):
   - "charge the car to 80 percent"
   - "don't charge the car tonight"
-  - "charge the car now, for 30 minutes" (leave out the minutes for one hour)
+  - "charge the car now, for 30 minutes" (leave out the minutes for one hour).
+    A charger on Off charges for that time, then goes back to Off.
   - "charge normally again"
   - "set the charger to Sun plus tariff" (Off, Sun, Sun plus tariff or Now;
     the old names such as "solar only" still work)
@@ -686,7 +687,7 @@ An AI assistant in Home Assistant can use SEM's tools. Ask it in your own words.
   `solar_energy_management__SemSetupStatus` and so on. The intent names in
   sentence files stay the same.
 - `solar_energy_management__SemSetupStatus` (read-only) tells the assistant how SEM is set up.
-- The four change tools appear only when Voice commands is on.
+- The change tools appear only when Voice commands is on.
 - `solar_energy_management__SemDraftIssue` prepares a bug report. It posts nothing. Check the text,
   attach the diagnostics file and submit it yourself. Tokens, e-mail addresses and
   entity names are removed.
