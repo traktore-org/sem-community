@@ -296,13 +296,19 @@ class ChargeTargetHold:
         now reads the other value (SEM's, or the put-back again), starts
         its time again. ``settle`` does this too, but it sends put-backs,
         so it does not run on every cycle (a forced charge, watch-only, a
-        yield). Nothing is sent or dropped here."""
+        yield). Nothing is sent here. A memory whose time is up, or a
+        number that reads a value set since, ends the memory, as in
+        ``settle``: else a later read of SEM's value would start the time
+        again and take the user's own pick for SEM's (review)."""
         entity_id = str(entity_id or "")
         async with self._lock:
             await self._adopt()
             t = self._targets.get(entity_id)
-            if (t is None or t.held or t.pending or t.landed_at is None
-                    or self._landed_out(t)):
+            if t is None or t.held or t.pending or t.landed_at is None:
+                return
+            if self._landed_out(t):
+                del self._targets[entity_id]
+                await self._save()
                 return
             read = self._read(entity_id)
             if read is None:
@@ -311,7 +317,13 @@ class ChargeTargetHold:
             ours = any(abs(read - v) < tol for v in t.sent)
             if not ours and not (t.prior is not None
                                  and abs(read - t.prior) < tol):
-                return              # a value set since: settle or write ends it
+                # the user set a value of their own
+                del self._targets[entity_id]
+                await self._save()
+                self._say(entity_id, logging.INFO,
+                          "Battery: %s reads %s — SEM's charge target is "
+                          "gone (#1180)", entity_id, read)
+                return
             if self._shows(t, ours):
                 await self._save()
 

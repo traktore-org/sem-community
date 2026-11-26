@@ -71,6 +71,13 @@ async def _the_old_copy_from_five_minutes(hass, rec, hold, clock):
     return a
 
 
+async def _yielded_cycles(a, clock, seconds):
+    for _ in range(int(seconds // 10)):
+        clock.t += 10
+        await a.async_adopt_running_charge()
+        await actuate_battery(_idle(), a, yielded=True)
+
+
 class TestTheReportersLag:
     """The 23.11 lag shape, mirrored on a stop: the old copy shows from
     5 min and is still there 15 min after the put-back."""
@@ -238,6 +245,33 @@ class TestTheReserveOnCyclesWithNoSettle:
         await actuate_battery(_charge(), a)
         assert _reserve_prior(hold) == 0, "not SEM's own 100 %"
 
+    async def test_a_value_set_by_hand_while_yielded_is_the_users(self, wall):
+        """(review) Yielded from the stop on, so ``settle`` never runs: the
+        user sets 30 at 2 min, then SEM's own 100 at 8 min. That 100 is
+        theirs; the charge at 18 min must not put 0 back over it."""
+        clock = wall
+        hass, rec, hold = _Hass(reserve="0"), _Store(), _Store()
+        a = await _charge_then_stop(hass, rec, hold, clock)
+        await _yielded_cycles(a, clock, 2 * MIN)
+        hass.put(RESERVE, "30")
+        await _yielded_cycles(a, clock, 6 * MIN)
+        hass.put(RESERVE, "100")
+        await _yielded_cycles(a, clock, 10 * MIN)
+        await actuate_battery(_charge(), a)
+        assert _reserve_prior(hold) == 100, "the user's own 100 %"
+
+    async def test_sems_value_after_the_time_is_up_is_the_users(self, wall):
+        """Yielded: the put-back shows for 16 min, then 100. The memory is
+        over, so that 100 is the user's pick and does not start it again."""
+        clock = wall
+        hass, rec, hold = _Hass(reserve="0"), _Store(), _Store()
+        a = await _charge_then_stop(hass, rec, hold, clock)
+        await _yielded_cycles(a, clock, 16 * MIN)
+        hass.put(RESERVE, "100")
+        await _yielded_cycles(a, clock, 1 * MIN)
+        await actuate_battery(_charge(), a)
+        assert _reserve_prior(hold) == 100, "the user's own 100 %"
+
     async def test_watch_only_writes_nothing(self, wall):
         clock = wall
         hass, rec, hold = _Hass(reserve="0"), _Store(), _Store()
@@ -328,7 +362,10 @@ class TestTheReserveHold:
         assert await fresh.write(RESERVE, 80)
         assert _reserve_prior(store) == 0
 
-    async def test_observe_sends_and_drops_nothing(self):
+    async def test_observe_sends_nothing_and_a_value_set_since_ends_it(self):
+        """(review) A value set since ends the memory here too, as in
+        ``settle``: kept, a later read of SEM's value would start the time
+        again and take the user's own pick for SEM's."""
         hass, store = _Hass(reserve="0"), _Store()
         hold = await self._landed(hass, store)
         n = len(hass.calls)
@@ -338,8 +375,15 @@ class TestTheReserveHold:
         assert json.loads(store.raw)["entities"][RESERVE]["landed_sem"] is True
         hass.put(RESERVE, "30")                   # set by hand
         await hold.observe(RESERVE)
-        assert RESERVE in json.loads(store.raw)["entities"]
+        assert json.loads(store.raw)["entities"] == {}
         assert hass.calls[n:] == []
+
+    async def test_observe_ends_a_memory_whose_time_is_up(self):
+        hass, store = _Hass(reserve="0"), _Store()
+        hold = await self._landed(hass, store)
+        hold.now[0] = 15 * MIN + 1
+        await hold.observe(RESERVE)
+        assert json.loads(store.raw)["entities"] == {}
 
     async def test_the_put_back_read_again_starts_its_time_again(self):
         hass, store = _Hass(reserve="0"), _Store()
