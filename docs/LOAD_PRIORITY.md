@@ -35,6 +35,9 @@ is left.
   down or up. After that it only rises, to the largest draw seen.
 - A load with no power sensor keeps the 1 kW placeholder. SEM does not start
   such a load on a small surplus.
+- A load holds back sun or battery for itself only when it could start now.
+  A full tank, a load on Off, or one that needs more sun than there is leaves
+  it to the next device.
 
 **Requires.** A load can require another, for example a towel rail that runs
 only when the pool pump runs. A required device sits directly below its parent
