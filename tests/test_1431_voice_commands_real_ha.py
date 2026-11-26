@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import pytest
 from homeassistant.helpers import intent
 from homeassistant.helpers import llm as llm_helper
 from homeassistant.helpers.llm import LLM_API_ASSIST, LLMContext, ToolInput

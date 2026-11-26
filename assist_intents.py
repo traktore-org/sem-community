@@ -454,7 +454,7 @@ class ClearPlanOverrideIntent(intent.IntentHandler):
 #: Spoken / written mode names → the select's four options.
 _MODE_WORDS = {
     "off": "off", "stop": "off",
-    "sun": "sun", "solar": "sun", "sun only": "sun", "solar only": "sun",
+    "sun": "sun", "solar": "sun", "sun only": "sun",
     "sun + tariff": "sun_tariff", "sun plus tariff": "sun_tariff",
     "sun and tariff": "sun_tariff", "sun tariff": "sun_tariff",
     "sun_tariff": "sun_tariff", "sun+tariff": "sun_tariff",

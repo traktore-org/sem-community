@@ -1,1 +1,2 @@
 # RATCHET-LOOSENED: #1381 to=134 — the inventory scans the whole package and counts references (owner review S0); S6 adds the phase switch through the device seam (the direct call stays only for a caller with no device)
+# RATCHET-LOOSENED: #1431 to=135 — the voice peak-limit command calls SEM's own update_target_peak service; it writes no charger

@@ -1,5 +1,5 @@
 {
- "total": 134,
+ "total": 135,
  "sites": {
   "__init__.py::_async_register_phase_services::async_call": 4,
   "__init__.py::_async_register_services::async_call": 4,
@@ -9,6 +9,7 @@
   "__init__.py::async_remove_entry::release_to_user": 1,
   "__init__.py::async_setup_entry::async_call": 2,
   "__init__.py::async_unload_entry::release_to_user": 1,
+  "assist_intents.py::async_handle::async_call": 1,
   "button.py::async_press::async_call": 1,
   "coordinator/actuate_battery.py::restore_discharge_limit_on_startup::async_call": 1,
   "coordinator/battery_adapters/base.py::_direction_ready::async_call": 1,
