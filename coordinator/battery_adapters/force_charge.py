@@ -740,31 +740,44 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     #: (#1377) this pack joined a charge SEM started for another pack, or
     #: in the last lifetime: SEM's "on" may stand on the permit
     _sel_joined: bool = False
-    #: (#1426) how long a read of SEM's own charge value, after SEM put the
-    #: user's value back, is taken as SEM's (a cloud shows a write minutes
-    #: late). The memory also ends when the entity shows a value set since
-    #: or SEM writes it again — NOT when it shows the put-back: a cloud
-    #: entity shows SEM's write at once, and its next poll can still show
-    #: SEM's charge value (round 2, 25.11.2026)
+    #: (#1426) after SEM put the user's value back, a read of SEM's own
+    #: charge value is taken as SEM's until one of the two has read this
+    #: long without a break (a cloud shows a write minutes late). The memory
+    #: also ends when the entity shows a value set since or SEM writes it
+    #: again — NOT when it shows the put-back: a cloud entity shows SEM's
+    #: write at once, and its next poll can still show SEM's charge value
+    #: (round 2, 25.11.2026)
     PUT_BACK_SETTLE_S = AWAY_FOR_S
 
     async def _as_user_sees(self, entity: str, state: "str | None") -> "str | None":
-        """(#1426) The value the user has, as far as SEM can tell. Inside
-        ``PUT_BACK_SETTLE_S`` after SEM put the user's value back, a read of
-        SEM's own charge value is a cloud read that has not caught up: the
-        user's value is the one SEM put back. A read of the put-back keeps
-        the memory (round 2): Tesla Fleet shows a write at once, then a poll
-        can show SEM's value again for minutes. A value that is neither, or
-        the time up, ends the memory: that value is the user's."""
+        """(#1426) The value the user has, as far as SEM can tell. After SEM
+        put the user's value back, a read of SEM's own charge value is a
+        cloud read that has not caught up: the user's value is the one SEM
+        put back. A read of the put-back keeps the memory (round 2): Tesla
+        Fleet shows a write at once, then a poll can show SEM's value again
+        for minutes.
+
+        (#1429) The memory ends on a read, the start's rule (``AWAY_FOR_S``
+        in ``_wait_while_away``): once one of the two values has read
+        ``PUT_BACK_SETTLE_S`` with no read of the other, it counts. The
+        put-back has landed; or SEM's value is the user's, since no cloud
+        read lags that long. A read of the other one starts the time again:
+        the cloud's old copy can show up minutes after the put-back and
+        last past 15 minutes from SEM's write (the 23.11 History: 16 min).
+        A value that is neither ends the memory at once: it is the user's.
+        An unreadable state is no read."""
         if not entity or state is None:
             return state
         row = await self.charge_record.put_back_of(entity)
         if row is None:
             return state
-        sem_value, back, at = row
+        sem_value, back, since, shown = row
+        now = time.time()
         # a time ahead of the clock (set back since) is over too
         if (state in (sem_value, back)
-                and 0.0 <= time.time() - at < self.PUT_BACK_SETTLE_S):
+                and 0.0 <= now - since < self.PUT_BACK_SETTLE_S):
+            if state != shown:
+                await self.charge_record.put_back_shows(entity, state, now)
             return back
         await self.charge_record.forget_put_back(entity)
         return state
@@ -778,7 +791,9 @@ class GenericChargeAdapter(BatteryChargeAdapter):
 
     async def _refresh_put_backs(self) -> None:
         """(#1426) Each stop, and each cycle, looks once: an entity that
-        shows a value set since, or whose time is up, ends the memory."""
+        shows a value set since, or whose value has read long enough, ends
+        the memory; (#1429) one that shows the other value starts its time
+        again."""
         try:
             entity = (select_setup(self.config) or ("", ""))[0]
             if entity:
@@ -786,6 +801,11 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             permit = permit_switch(self.config)
             if permit:
                 await self._as_user_sees(permit, self._permit_state(permit))
+            # (#1429) the reserve too: its hold's ``settle`` is skipped on a
+            # charge cycle, in watch-only mode and while yielded
+            target = str(self.config.get("battery_target_soc_entity", "") or "")
+            if target:
+                await self.target_hold.observe(target)
         except Exception:  # noqa: BLE001
             _LOGGER.debug("put-back memory not refreshed", exc_info=True)
 
