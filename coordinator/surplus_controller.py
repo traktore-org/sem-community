@@ -97,23 +97,28 @@ class SeniorView:
     """(#1435) The sun and pack an idle load ranked above a charger gets in
     the load pass, as the reservation walk must judge it.
 
-    The walk's own figure is ``solar − home``. That holds three things the
-    load pass does not give the load:
+    The walk's own figure is ``solar − home``. Three things in it never
+    reach the load:
 
     * the pack's charge power. The load pass hands it out (#576) only to a
-      load ranked above the pack, and only while the pack yields it
+      load ranked above the pack, only while the pack yields it
       (``pack_yields_charge``: SOC at or above the reserve floor, not
-      commanded). So ``sun_w`` keeps it out and ``sun_for`` adds it back for
-      a load the pack yields to. Five kW of sun with the pack at 20 %
+      commanded), and only the part the sun pays for (#938: charge less the
+      import). So ``sun_w`` keeps it out and ``sun_for`` adds ``reclaim_w``
+      back for a load above the pack. Five kW of sun with the pack at 20 %
       charging 3 kW: a 2.5 kW heat pump held 2.5 kW from the car, saw
       1.5 kW and stayed off, and 1.5 kW went to the grid.
-    * the load pass's filter and regulation offset. ``sun_w`` is read
-      through the same ``PoolFilter`` and offset, so the walk does not hold
-      and let go on each cycle's noise while the load pass sees a steady
-      figure.
+    * the load pass's filter, regulation offset and price damping. ``sun_w``
+      comes from the same steps (``SurplusController.senior_sun_w``), so the
+      walk does not hold and let go on each cycle's noise while the load
+      pass sees a steady figure.
     * what a charger ranked at or above the load took earlier in this
       cycle's charger loop (``taken``: rank, sun, pack). Its walk held
       nothing for the load, so that power is gone before the load pass.
+
+    ``sun_w`` is net of every running load's draw, like ``solar − home``:
+    the walk adds back only the juniors the load pass can stop
+    (``_displaced_draw_w``). So it may be below zero.
 
     ``pack_w`` / ``pack_above_w``: the pack a "Solar + battery" load may add
     to its start, below and above the pack (the load pass's two Tier-1
@@ -121,9 +126,8 @@ class SeniorView:
     """
 
     sun_w: float = 0.0
-    charge_w: float = 0.0
+    reclaim_w: float = 0.0
     battery_priority: Optional[int] = None
-    pack_yields: bool = False
     pack_w: Optional[float] = None
     pack_above_w: Optional[float] = None
     taken: tuple = ()
@@ -151,11 +155,12 @@ class SeniorView:
         return total
 
     def sun_for(self, device) -> float:
-        """The sun this load could start on, before the seniors above it."""
-        sun = max(0.0, float(self.sun_w or 0.0))
-        if self.pack_yields and self._above_pack(device):
-            sun += max(0.0, float(self.charge_w or 0.0))
-        return max(0.0, sun - self._taken(device, 1))
+        """The sun this load could start on, before the seniors above it
+        and before the juniors it may stop. May be below zero."""
+        sun = _num(self.sun_w)
+        if self._above_pack(device):
+            sun += max(0.0, _num(self.reclaim_w))
+        return sun - self._taken(device, 1)
 
     def pack_for(self, device) -> "Optional[float]":
         """The pack this load's start may add, before the seniors above it.
@@ -165,22 +170,38 @@ class SeniorView:
             pack = self.pack_above_w
         if pack is None:
             return None
-        return max(0.0, float(pack) - self._taken(device, 2))
+        return max(0.0, _num(pack) - self._taken(device, 2))
 
 
 def build_senior_view(config, *, solar_w, home_w, charge_w, soc,
                       soc_known=True, battery_priority=None,
                       battery_commanded=False, dynamic_floor_pct=None,
-                      grid_closed=False, controller=None) -> SeniorView:
+                      grid_closed=False, price_level=None,
+                      controller=None) -> SeniorView:
     """(#1435) This cycle's ``SeniorView``, built once before the charger
     loop from the same readings the load pass reads later in the cycle.
 
-    ``controller`` — the ``SurplusController``; its ``senior_sun_w`` gives
-    the load pass's filter and offset (one sample per call). ``None`` = the
-    raw figure, no filter."""
+    The load pass's pool is the export side plus the draw of its own running
+    loads (``solar_bounded_surplus``), filtered; the pack's charge comes on
+    top for a load above the pack. Here the export side is
+    ``solar − home − charge`` and the loads' draw is
+    ``controller.active_surplus_draw_w()``. Adding it back before the filter
+    keeps a load that switches on or off from moving the filtered figure;
+    it comes off again after.
+
+    ``controller`` — the ``SurplusController``; ``None`` = no loads' draw
+    and no filter (the raw figure)."""
     from .energy_reclaim import pack_yields_charge
-    headroom = max(0.0, _num(solar_w) - _num(home_w))
     charge = max(0.0, _num(charge_w))
+    draw = 0.0
+    read_draw = getattr(controller, "active_surplus_draw_w", None)
+    if callable(read_draw):
+        value = read_draw()
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            draw = max(0.0, float(value))
+    export_side = _num(solar_w) - _num(home_w) - charge
+    # never more than the sun (#620), as ``solar_bounded_surplus``
+    pool = max(0.0, min(export_side + draw, _num(solar_w)))
     try:    # the reclaim's own read (``reclaimable_battery_w``)
         priority_soc = float(config.get("battery_priority_soc", 30))
     except (TypeError, ValueError):
@@ -191,22 +212,26 @@ def build_senior_view(config, *, solar_w, home_w, charge_w, soc,
         battery_priority=battery_priority,
         battery_commanded=bool(battery_commanded),
     )
-    kept = max(0.0, headroom - charge)
+    # (#938) only the part of the charge the sun pays for: an import the
+    # pool could not take off comes off the charge
+    reclaim = (max(0.0, charge + min(0.0, export_side + draw))
+               if yields else 0.0)
     # The loads' own Tier-1 gates, before any charger took a share: the
-    # gate on the sun without the pack's charge, and with it for a load
-    # above a pack that yields it (#1114).
+    # gate on the pool, and on the pool plus the reclaim for a load above
+    # the pack (#1114).
     btc = build_battery_tier_context(
-        config, soc, kept, dynamic_floor_pct=dynamic_floor_pct,
-        reclaim_w=charge if yields else 0.0)
-    sun = kept
+        config, soc, pool, dynamic_floor_pct=dynamic_floor_pct,
+        reclaim_w=reclaim)
+    sun = pool
     filt = getattr(controller, "senior_sun_w", None)
     if callable(filt):
-        value = filt(kept, grid_closed=bool(grid_closed))
+        value = filt(pool, grid_closed=bool(grid_closed),
+                     price_level=price_level)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             sun = float(value)
     return SeniorView(
-        sun_w=sun, charge_w=charge, battery_priority=battery_priority,
-        pack_yields=yields, pack_w=btc.assist_budget_w,
+        sun_w=sun - draw, reclaim_w=reclaim,
+        battery_priority=battery_priority, pack_w=btc.assist_budget_w,
         pack_above_w=btc.assist_budget_above_battery_w)
 
 
@@ -426,13 +451,14 @@ def _reserved_for_seniors(devices, *, below_priority, cap_w, axis,
             if axis == "battery":
                 if help_w is not None and help_w <= 0.0:
                     continue    # it would take nothing from the pack
-                start_sun = own_sun if own_sun is not None else sun_w
+                start_sun = (own_sun if own_sun is not None
+                             else None if sun_w is None
+                             else max(0.0, float(sun_w)))
                 if start_sun is not None:
                     pack_left = cap - reserved
                     if help_w is not None:
                         pack_left = min(pack_left, help_w)
-                    if not _could_start(
-                            device, max(0.0, float(start_sun)) + freed + pack_left):
+                    if not _could_start(device, start_sun + freed + pack_left):
                         continue
             else:
                 sun_left = (cap if own_sun is None else own_sun) - reserved
@@ -2710,14 +2736,32 @@ class SurplusController:
         """The last raw samples behind the median of three."""
         return self._surplus_filter.samples
 
-    def senior_sun_w(self, sun_w: float, *, grid_closed: bool = False) -> float:
-        """(#1435) The sun an idle load gets in the load pass, for the
-        chargers' reservation walk: ``sun_w`` (solar − home, the pack's
-        charge kept out) through the load pass's own filter and regulation
-        offset. Call it once per cycle: each call is one filter sample."""
-        smoothed = self._senior_filter.update(max(0.0, float(sun_w or 0.0)))
-        offset = 0.0 if grid_closed else float(self.regulation_offset or 0.0)
-        return max(0.0, smoothed - offset)
+    def _pool_from(self, smoothed: float, *, grid_closed: bool,
+                   price_level: Optional[str]) -> float:
+        """The load pass's pool from its filtered sun: less the regulation
+        offset (none while the meter is closed, #871), plus what passes the
+        export limit, damped by the price (#953). One method, so the
+        chargers' walk (#1435) asks the same."""
+        offset = 0.0 if grid_closed else self.regulation_offset
+        pool = smoothed - offset
+        # Feed-in/export limitation: add virtual surplus when approaching limit
+        if self.max_export_w > 0 and smoothed > self.max_export_w:
+            pool += smoothed - self.max_export_w  # Force-route excess to devices
+        # Price-responsive adjustments
+        if self._price_responsive_mode and price_level:
+            pool = self._apply_price_adjustment(pool, price_level)
+        return pool
+
+    def senior_sun_w(self, pool_w: float, *, grid_closed: bool = False,
+                     price_level: Optional[str] = None) -> float:
+        """(#1435) The load pass's pool for the chargers' reservation walk:
+        ``pool_w`` (the export side plus the loads' own draw, as
+        ``build_senior_view`` reads it) through the load pass's own filter,
+        offset and price damping. Call it once per cycle: each call is one
+        filter sample."""
+        smoothed = self._senior_filter.update(max(0.0, float(pool_w or 0.0)))
+        return self._pool_from(smoothed, grid_closed=grid_closed,
+                               price_level=price_level)
 
     def active_surplus_draw_w(self) -> float:
         """Sum the current draw of the surplus devices this controller
@@ -3273,18 +3317,12 @@ class SurplusController:
 
         # Apply regulation offset — none while the meter is closed (#871)
         _offset = 0.0 if grid_closed else self.regulation_offset
-        distributable = self._smoothed_surplus - _offset
         self._grid_closed = bool(grid_closed)
-        self._last_surplus = distributable
-
-        # Feed-in/export limitation: add virtual surplus when approaching limit
-        if self.max_export_w > 0 and self._smoothed_surplus > self.max_export_w:
-            excess_export = self._smoothed_surplus - self.max_export_w
-            distributable += excess_export  # Force-route excess to devices
-
-        # Price-responsive adjustments
-        if self._price_responsive_mode and price_level:
-            distributable = self._apply_price_adjustment(distributable, price_level)
+        self._last_surplus = self._smoothed_surplus - _offset
+        # …then the export limit and the price (#1435: one method, the walk's)
+        distributable = self._pool_from(
+            self._smoothed_surplus, grid_closed=grid_closed,
+            price_level=price_level)
 
         devices = self.get_devices_sorted()
         # (#1335) …plus a load that was disabled while a run SEM started is

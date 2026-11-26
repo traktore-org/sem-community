@@ -85,6 +85,18 @@ def test_a_commanded_or_unread_pack_keeps_its_charge():
     assert _held([hp], unread) == 0.0
 
 
+def test_a_pack_charged_from_the_grid_gives_only_the_sun_part():
+    """(#938) Pack at 60 % charges 3 kW, 1 kW of it from the grid (an
+    inverter time window): solar 3 kW, house 1 kW. The load pass gives a
+    load above the pack 2 kW, so a 2.5 kW heat pump holds nothing."""
+    hp = _senior(priority=1, rated=2500.0)
+    view = _view(60.0, solar=3000.0, home=1000.0, charge=3000.0)
+    assert view.reclaim_w == 2000.0
+    assert _held([hp], view, headroom=2000.0) == 0.0
+    # all of it from the sun: 5 kW, and the heat pump holds its 2.5 kW
+    assert _held([hp], _view(60.0)) == 2500.0
+
+
 def test_no_charge_is_the_old_figure():
     """With the pack idle the view is the headroom, as before."""
     hp = _senior(priority=4)
@@ -98,8 +110,8 @@ def test_the_battery_axis_reads_the_same_sun():
     """A "Solar + battery" heat pump below the pack: 2 kW of sun (the 3 kW
     charge kept out) plus 400 W the pack may add cannot start 2.5 kW."""
     hp = _senior(priority=4, assist=True)
-    view = SeniorView(sun_w=2000.0, charge_w=3000.0, battery_priority=3,
-                      pack_yields=True, pack_w=400.0, pack_above_w=3000.0)
+    view = SeniorView(sun_w=2000.0, reclaim_w=3000.0, battery_priority=3,
+                      pack_w=400.0, pack_above_w=3000.0)
     held = tier1_battery_reserved_w([hp], below_priority=8, allowance_w=3000.0,
                                     sun_w=5000.0, pack_w=400.0, senior=view)
     assert held == 0.0
@@ -154,7 +166,7 @@ def test_the_walk_and_the_load_pass_agree():
                 view = _view(soc, solar=float(solar), charge=1500.0)
                 pool = max(0.0, solar - 1500.0)
                 if soc >= 30.0 and prio < 3:
-                    pool += 1500.0          # the load pass's reclaim
+                    pool += min(1500.0, solar)   # the load pass's reclaim
                 starts = compute_load_intent(
                     dev, remaining_surplus_w=pool, tier1_headroom_w=0.0,
                     is_night=False).on
@@ -210,6 +222,43 @@ def test_the_offset_is_the_load_pass_offset():
         assert _held([hp], view, headroom=2520.0) == held
 
 
+def test_a_load_switching_on_does_not_lag_the_hold():
+    """Solar 5.5 kW. Heat pump 1 (prio 1, 2.5 kW) starts; heat pump 2
+    (prio 2, 3.2 kW) is idle. The load pass gives heat pump 2
+    5.5 − 0.05 − 2.5 = 2.95 kW from the first cycle on, so it holds nothing
+    from the car. The filter reads the loads' draw added back, so the start
+    does not move it."""
+    sc = SurplusController(MagicMock(), regulation_offset=50)
+    hp1 = _senior(priority=1, rated=2500.0, name="hp1")
+    hp2 = _senior(priority=2, rated=3200.0, name="hp2")
+    draw = {"w": 0.0}
+    sc.active_surplus_draw_w = lambda: draw["w"]
+    for n in range(20):
+        if n == 10:                       # heat pump 1 starts
+            draw["w"] = 2500.0
+            hp1.is_active = True
+            hp1.get_current_consumption = lambda: 2500.0
+        view = build_senior_view(CONFIG, solar_w=5500.0, home_w=draw["w"],
+                                 charge_w=0.0, soc=None, controller=sc)
+        held = _held([hp1, hp2], view, headroom=5500.0 - draw["w"], below=5)
+        if n >= 10:
+            assert held == 0.0, (n, held)
+    assert sc._senior_filter.value == 5500.0
+
+
+def test_an_expensive_hour_damps_the_walk_as_it_damps_the_load_pass():
+    """(#953) With price response on, an expensive hour takes 500 W off the
+    load pass's pool: 2.8 kW of sun no longer starts a 2.5 kW heat pump."""
+    hp = _senior(priority=1, rated=2500.0)
+    for level, held in (("expensive", 0.0), ("normal", 2500.0)):
+        sc = SurplusController(MagicMock(), regulation_offset=50)
+        sc.price_responsive_mode = True
+        view = build_senior_view(CONFIG, solar_w=2800.0, home_w=0.0,
+                                 charge_w=0.0, soc=None, price_level=level,
+                                 controller=sc)
+        assert _held([hp], view, headroom=2800.0) == held, level
+
+
 def test_the_load_pass_filter_is_unchanged():
     """``PoolFilter`` is the load pass's old median of three and average."""
     sc = SurplusController(MagicMock(), regulation_offset=0)
@@ -259,10 +308,32 @@ def test_the_loop_hands_both_walks_the_view_and_records_each_take():
     )
     from .ast_contracts import _tree_of, call_kwargs
     loop = SEMCoordinator._async_update_data
+    tree = _tree_of(loop)
     for name in ("_surplus_reserved_w", "_tier1_reserved_w"):
         calls = call_kwargs(loop, name)
         assert calls and all("senior" in kw for kw in calls), name
-    tree = _tree_of(loop)
+        # …with this cycle's takes in it
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Call)
+                    and getattr(n.func, "id", getattr(n.func, "attr", None)) == name):
+                senior = next(k.value for k in n.keywords if k.arg == "senior")
+                assert isinstance(senior, ast.Call) and "taken" in {
+                    k.arg for k in senior.keywords}, name
+    # one view and one reset per cycle: both before the charger loop
+    loops = [n for n in ast.walk(tree) if isinstance(n, ast.For)
+             and isinstance(n.iter, ast.Name) and n.iter.id == "sorted_chargers"]
+    assert loops
+    for for_node in loops:
+        inside = list(ast.walk(for_node))
+        assert not any(
+            isinstance(n, ast.Call)
+            and getattr(n.func, "id", getattr(n.func, "attr", None)) == "build_senior_view"
+            for n in inside), "the view is built per charger: one filter sample each"
+        assert not any(
+            isinstance(n, ast.Assign) and any(
+                isinstance(t, ast.Attribute) and t.attr == "_charger_takes_per_cycle"
+                for t in n.targets)
+            for n in inside), "the takes are reset inside the loop"
     appends = [
         n for n in ast.walk(tree)
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)

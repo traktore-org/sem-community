@@ -5630,6 +5630,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     grid_closed=bool(getattr(
                         (getattr(self, "_sink_verdicts", None) or {}).get(
                             "grid_export"), "state", "open") == "closed"),
+                    price_level=getattr(_fs, "tariff_level", None),
                     controller=_sc,
                 )
                 _pack_for_loads_w = _senior_view.pack_w
@@ -6302,6 +6303,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                         _pg_reason = yield_override_reason(
                             self, decision, adapter=adapter, power=view.power,
                             yielded=_ylds)
+                        # (#1435) this charger's take, by its rank (below)
+                        _sun_before_w = float(self._solar_committed_w_per_cycle)
+                        _pack_before_w = float(self._assist_committed_w_per_cycle)
                         try:
                             await actuate(
                                 decision, adapter, view.power,
@@ -6351,9 +6355,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # tests/test_665_allocator_coverage.py fails CI if
                             # the reset or this call disappears.
                             from .charger_types import solar_commitment_w
-                            # (#1435) this charger's own take, by its rank
-                            _sun_before_w = float(self._solar_committed_w_per_cycle)
-                            _pack_before_w = float(self._assist_committed_w_per_cycle)
                             # (#1391) A charger another party steers commits
                             # nothing of SEM's, but its draw is real, and the
                             # home's power leaves car charging out: without
@@ -6394,18 +6395,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                             # reports.
                             self._assist_committed_w_per_cycle += max(
                                 0.0, float(getattr(decision, "assist_w", 0.0) or 0.0))
-                            # (#1435) A load ranked below this charger was held
-                            # nothing by its walk: what it took is gone before
-                            # the load pass, for every later charger's walk.
-                            self._charger_takes_per_cycle.append((
-                                self._ev_priority_for(cid),
-                                float(self._solar_committed_w_per_cycle) - _sun_before_w,
-                                float(self._assist_committed_w_per_cycle) - _pack_before_w,
-                            ))
                         except (HomeAssistantError, ServiceValidationError) as e:
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                        # (#1435) A load ranked at or below this charger's
+                        # rank was held nothing by its walk: what it took is
+                        # gone before the load pass, for every later walk.
+                        # Read off the two totals, so a failed step above
+                        # still leaves the part that was booked.
+                        self._charger_takes_per_cycle.append((
+                            self._ev_priority_for(cid),
+                            float(self._solar_committed_w_per_cycle) - _sun_before_w,
+                            float(self._assist_committed_w_per_cycle) - _pack_before_w,
+                        ))
                         # (#1381, charger owner S5) the guard's stop of a
                         # yielded charger leaves an owed undo in the ledger:
                         # keep it as this charger's record. Outside the
