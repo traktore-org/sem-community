@@ -3311,6 +3311,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_device.stop_service = _cfg("ev_stop_service")
                 ev_device.stop_service_data = json.loads(_cfg("ev_stop_service_data", "{}"))
 
+            # (#1417) a charger may buy on its own tariff and meter, like a
+            # load (#812) — e.g. the heat pump + car meter of a cascade
+            # (Messkonzept 12). Its own row only, never the house's flat keys.
+            from .coordinator.device_tariff import TARIFF_KEYS, apply_tariff
+            apply_tariff(ev_device, {k: charger_cfg.get(k) for k in TARIFF_KEYS
+                                     if k in charger_cfg})
             coordinator._surplus_controller.register_device(ev_device)
             coordinator._ev_devices[charger_id] = ev_device
             # (#935) The park debt has to outlive the process that took it —

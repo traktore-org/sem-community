@@ -1155,6 +1155,9 @@ class FleetCycleState:
     #: (#878) rides beside the budget it bounds
     dynamic_floor_pct: "Optional[float]" = None
     tariff_level: "Optional[str]" = None
+    #: (#1417) charger id → its own tariff's level; a charger not here reads
+    #: ``tariff_level`` (the house), exactly as before.
+    charger_tariff_levels: "Mapping[str, str]" = field(default_factory=dict)
     forecast_remaining_kwh: float = 0.0
     # (#747) the load manager's peak posture, resolved once per cycle.
     peak_state: str = "normal"

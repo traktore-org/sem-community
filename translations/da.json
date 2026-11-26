@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automatiseringer bruger gamle navne på ladetilstand",
       "description": "SEM's ladetilstande hedder nu Sol, Sol + tarif, Nu og Fra. Home Assistant afviser de gamle navne i select.select_option, og en udløser på et gammelt navn udløses ikke længere. Ret disse: {uses} SEM finder de fleste steder. Tjek også blueprints og automatiseringer lavet uden for brugerfladen."
+    },
+    "shared_meter_two_prices": {
+      "title": "Én måler med to priser: {meter}",
+      "description": "Enhederne {devices} deler måleren {meter}, men har forskellige priser. En måler har én pris, så SEM bruger prisen for {used} til dem alle. Giv dem alle samme pris under Enhedens tarif."
     }
   },
   "selector": {

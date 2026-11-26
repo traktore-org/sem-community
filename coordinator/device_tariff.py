@@ -78,6 +78,11 @@ METER_STAND_MAX_H = 24.0
 _UNREADABLE = ("unavailable", "unknown", "none", "")
 
 
+def shared_meter_id(meter: str) -> str:
+    """(#1417) The booking id of a meter several devices share."""
+    return f"meter:{meter}"
+
+
 def parse_rate(value: Any) -> float:
     """A stored rate → a finite, positive float; anything else 0 (none)."""
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
@@ -179,6 +184,11 @@ class DeviceCycle:
     meter_kwh: float = 0.0
     price: Optional[float] = None
     baseline: Optional[Dict[str, Any]] = None
+    #: (#1417) A meter several devices share: this entry IS the meter
+    #: (``device_id`` = ``meter:<entity>``), booked through the same path as
+    #: one device's own meter (#1228 hold, #1230 spread); ``members`` = each
+    #: device's id and draw now (W), what its booked kWh are split by.
+    members: tuple = ()
 
 
 def device_price_level(device: Any, house_level: Optional[str]) -> Optional[str]:
@@ -325,11 +335,24 @@ class DeviceTariffs:
 
     def cycle(self, devices: Iterable[Any], store: Dict[str, Any],
               now: datetime) -> list:
-        """(#812) This cycle's own-tariff devices for the import booking."""
+        """(#812) This cycle's own-tariff devices for the import booking.
+
+        (#1417) A meter named by more than one device (the heat pump and the
+        car behind one cascade meter, Messkonzept 12) is ONE own-meter entry
+        (``_shared_cycle``), booked like any own meter and split between
+        those devices by what each used over the step's span. What none of
+        them used stays on the meter (the ``meter:<entity>`` row) — that
+        tariff's kWh, never the house's.
+        """
+        devices = list(devices)
+        configured = [d for d in devices if tariff_of(d).configured]
+        shared = self.shared_groups(configured)
         out = []
-        for device in devices:
+        for meter, group in sorted(shared.items()):
+            out.extend(self._shared_cycle(meter, group, store, now))
+        for device in configured:
             tariff = tariff_of(device)
-            if not tariff.configured:
+            if tariff.meter in shared:
                 continue
             did = str(getattr(device, "device_id", "") or "")
             step, baseline = (self.meter_step(device, store, now)
@@ -339,6 +362,46 @@ class DeviceTariffs:
                 meter=bool(tariff.meter), meter_kwh=step or 0.0,
                 price=self.price_now(device), baseline=baseline))
         return out
+
+    def _shared_cycle(self, meter: str, group: list, store: Dict[str, Any],
+                      now: datetime) -> list:
+        """(#1417) A meter several devices share, as ONE own-meter entry.
+
+        The meter is read once (its baseline under ``meter:<entity>``) and
+        goes through the same booking as one device's own meter — the #1228
+        hold and the #1230 spread. Its booked kWh are split between the
+        devices by what each used over the same span (``members``: their
+        draw now, which the booking integrates). One meter, one price: the
+        first device's (``group_price``)."""
+        from types import SimpleNamespace
+        key = shared_meter_id(meter)
+        reader = SimpleNamespace(
+            device_id=key, name=key, tariff_rate=0.0, tariff_entity="",
+            tariff_meter=meter,
+            rated_power=sum(top_power_w(d) for d in group))
+        step, baseline = self.meter_step(reader, store, now)
+        members = tuple((str(getattr(d, "device_id", "") or ""), power_now_w(d))
+                        for d in group)
+        return [DeviceCycle(
+            device_id=key, power_w=sum(w for _did, w in members), meter=True,
+            meter_kwh=step or 0.0, price=self.price_now(group[0]),
+            baseline=baseline, members=members)]
+
+    @staticmethod
+    def mixed_prices(group: list) -> bool:
+        """(#1417) Do the devices that name one meter carry different
+        tariffs? One meter has one price: the first device's is used."""
+        return len({(tariff_of(d).rate, tariff_of(d).entity) for d in group}) > 1
+
+    def shared_groups(self, devices: Iterable[Any]) -> Dict[str, list]:
+        """(#1417) meter entity → the configured devices that name it, for
+        every meter named more than once (in device order)."""
+        by_meter: Dict[str, list] = {}
+        for device in devices:
+            t = tariff_of(device)
+            if t.configured and t.meter:
+                by_meter.setdefault(t.meter, []).append(device)
+        return {m: ds for m, ds in by_meter.items() if len(ds) > 1}
 
     def stamp(self, devices: Iterable[Any]) -> None:
         """Once per cycle: each device's gate level and log inputs.

@@ -43,6 +43,9 @@ _THIN = 12
 #: Every memo-gated clear site → how a Repair left by a previous lifetime
 #: (before a restart, or before an options reload) gets cleared.
 DECLARED: dict[str, str] = {
+    "coordinator/coordinator.py::SEMCoordinator._check_shared_meter_prices":
+        "the Repair is non-persistent, so a restart or reload drops it; the "
+        "memo only stops a second raise in one lifetime (#1417)",
     "coordinator/ev_control.py::EVControlMixin._phase_switch_tick":
         "the first phase switch that goes out in each lifetime clears the "
         "phase_switch_refused Repair once (_phase_refused_cleared_once, "

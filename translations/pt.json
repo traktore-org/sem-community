@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automações usam nomes antigos do modo de carga",
       "description": "Os modos de carga do SEM agora são Sol, Sol + tarifa, Agora e Desligado. O Home Assistant recusa os nomes antigos em select.select_option, e um gatilho com um nome antigo já não dispara. Altere estes: {uses} O SEM encontra a maioria dos usos. Verifique também os blueprints e as automações criadas fora da interface."
+    },
+    "shared_meter_two_prices": {
+      "title": "Um contador com dois preços: {meter}",
+      "description": "Os dispositivos {devices} partilham o contador {meter} mas têm preços diferentes. Um contador tem um só preço, por isso o SEM usa o preço de {used} para todos. Dê a todos o mesmo preço em Tarifa do dispositivo."
     }
   },
   "selector": {

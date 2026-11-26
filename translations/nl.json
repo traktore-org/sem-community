@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automatiseringen gebruiken oude laadmodusnamen",
       "description": "De laadmodi van SEM heten nu Zon, Zon + tarief, Nu en Uit. Home Assistant weigert de oude namen in select.select_option, en een trigger op een oude naam gaat niet meer af. Pas deze aan: {uses} SEM vindt de meeste plekken. Controleer ook blueprints en automatiseringen die buiten de interface zijn gemaakt."
+    },
+    "shared_meter_two_prices": {
+      "title": "Eén meter met twee prijzen: {meter}",
+      "description": "De apparaten {devices} delen de meter {meter} maar hebben verschillende prijzen. Eén meter heeft één prijs, dus SEM gebruikt de prijs van {used} voor allemaal. Geef ze onder Apparaattarief allemaal dezelfde prijs."
     }
   },
   "selector": {

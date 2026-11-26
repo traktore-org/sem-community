@@ -259,6 +259,22 @@ export function chargerBody(card, row) {
     }
     const srow = (label, value, spec, o = {}) => card._setRow({ label, value, disabled: dis || !!o.disabled, help: o.help || '', more: !!o.more,
         onTap: () => card._editDialog({ title: label, ...spec }) });
+    // (#1417) the charger's own tariff and meter, as a load has them (#812):
+    // a heat pump + car meter of a cascade (Messkonzept 12) or a car rate
+    if (modeId) {
+        const setTariff = (key, v) => card._svc('set_option', { options: { ev_chargers: [{ id: cid, [key]: v }] } });
+        const rate = parseFloat(modeAttrs.tariff_rate) || 0;
+        const tEnt = modeAttrs.tariff_entity || '', tMeter = modeAttrs.tariff_meter || '';
+        moreRows.push(srow(t('next_device_tariff'), rate > 0 ? card._money(rate) : t('next_house_tariff'),
+            card._numEdit('ctariff:' + cid, { value: rate || null, min: 0, step: 0.001, onCommit: (v) => setTariff('tariff_rate', v > 0 ? Number(v) : 0) }),
+            {}));
+        moreRows.push(srow(t('device_tariff_entity'), tEnt ? card._name(tEnt) : t('action_none'),
+            card._entEdit('ctariffent:' + cid, { value: tEnt, domains: ['sensor', 'input_number'], onCommit: (v) => setTariff('tariff_entity', v || '') }),
+            {}));
+        moreRows.push(srow(t('device_tariff_meter'), tMeter ? card._name(tMeter) : t('action_none'),
+            card._entEdit('ctariffmeter:' + cid, { value: tMeter, domains: ['sensor'], onCommit: (v) => setTariff('tariff_meter', v || '') }),
+            { help: t('device_tariff_hint') }));
+    }
     if (timeId) {
         // (#1321) the schedule is shown once, here: the time, its weekdays, the next departure and the planned kWh
         const more = [dep.next && card._hhmm(dep.next) !== chargeBy ? tf('next_next_departure', { time: card._hhmm(dep.next) }) : '',

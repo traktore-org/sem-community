@@ -3489,6 +3489,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # priced at the house rate
             attrs["price_source"] = self.coordinator.data.get(
                 f"tariff_price_source_{did}")
+            # (#1417) a meter shared with other devices: what it counted
+            # today that none of them drew — that tariff's, not the house's
+            unassigned = self.coordinator.data.get(f"tariff_meter_unassigned_kwh_{did}")
+            if unassigned is not None:
+                attrs["shared_meter_unassigned_kwh_today"] = unassigned
         elif self.entity_description.key == "yearly_feed_in_fees":
             # (#1077) Where a tiered fee stands: this year's export, the fee
             # on the next kWh, and where the next tier starts.

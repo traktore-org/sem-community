@@ -172,6 +172,35 @@ def _calendar_next_for(host: Any, cid: str) -> Optional[datetime]:
     return result if isinstance(result, datetime) else None
 
 
+def _charger_tariff_levels(coord) -> dict:
+    """(#1417) charger id → its own tariff's price level, for a charger on
+    its own tariff (stamped each cycle by ``DeviceTariffs.stamp``). A charger
+    without one is absent, so its view reads the house level as before."""
+    from .device_tariff import tariff_of
+    out = {}
+    for cid, dev in (getattr(coord, "_ev_devices", None) or {}).items():
+        if not tariff_of(dev).configured:
+            continue
+        lvl = getattr(dev, "_tariff_level", None)
+        if isinstance(lvl, str):
+            out[str(cid)] = lvl
+    return out
+
+
+def _ev_plan_tariff(coord, cid) -> Any:
+    """(#1417) The charger's own tariff as the planner reads it, or None
+    (the house tariff — no own tariff set, or its price cannot be read)."""
+    dev = (getattr(coord, "_ev_devices", None) or {}).get(cid)
+    tariffs = getattr(getattr(coord, "_surplus_controller", None),
+                      "device_tariffs", None)
+    if dev is None or tariffs is None:
+        return None
+    try:
+        return tariffs.plan_tariff(dev)
+    except Exception:  # noqa: BLE001 — a bad tariff never costs a plan
+        return None
+
+
 def _sun_tariff_day_of(host: Any, charger_cfg: Any) -> bool:
     """(#1381 D23) Does this charger run the Sun + tariff day rule (either
     stored strategy behind "Sun + tariff")? The planner's thin-sun booking
@@ -14619,6 +14648,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # (``kwh`` is that floor: bound="min", > 0.1 as in decide)
                     grid_in_sun=bool(_sun_tariff_day_of(self, cfg)
                                      and float(kwh) > 0.1),
+                    # (#1417) a charger on its own tariff is planned on it —
+                    # the same reader the loads and its live gate use (#812)
+                    tariff=_ev_plan_tariff(self, cid),
                 ))
             # Load min-runtime deficits eligible for a night source.
             controller = getattr(self, "_surplus_controller", None)
@@ -17052,6 +17084,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             battery_forced_grid_w=self._battery_forced_grid_w(power),
             is_night=self.time_manager.is_night_mode(),
             tariff_level=tariff_level,
+            # (#1417) a charger on its own tariff reads its own level
+            charger_tariff_levels=_charger_tariff_levels(self),
             forecast_remaining_kwh=float(forecast_remaining),
             # (#778) Tonight's budget, computed a step earlier from measured
             # inputs. 0.0 until the evidence exists — never a guess.
@@ -19629,6 +19663,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if calc is None or tariffs is None:
             return
         devices = list(self._surplus_controller._devices.values())
+        self._check_shared_meter_prices(tariffs, devices)
         entries = tariffs.cycle(devices, calc.device_meter_last, dt_util.now())
         names = {d.device_id: getattr(d, "name", d.device_id) for d in devices}
         for e in entries:
@@ -19642,6 +19677,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         # registered is not time off its own meter
         calc.set_device_tariff_cycle(
             entries, known=[str(getattr(d, "device_id", "") or "") for d in devices])
+
+    def _check_shared_meter_prices(self, tariffs, devices) -> None:
+        """(#1417) One meter, one price: a Repair names the devices when
+        those sharing a meter carry different tariffs (the first device's
+        price is used for all of them); cleared when they agree again."""
+        from .device_tariff import tariff_of
+        from .repair_issues import (
+            clear_shared_meter_two_prices, raise_shared_meter_two_prices,
+        )
+        groups = tariffs.shared_groups(devices)
+        was = getattr(self, "_shared_meter_mixed", set())
+        now_mixed = set()
+        for meter, group in groups.items():
+            if not tariffs.mixed_prices(group):
+                continue
+            now_mixed.add(meter)
+            if meter in was:
+                continue
+            first = tariff_of(group[0])
+            raise_shared_meter_two_prices(
+                self.hass, meter,
+                devices=", ".join(str(getattr(d, "name", "") or d.device_id) for d in group),
+                used=str(getattr(group[0], "name", "") or group[0].device_id)
+                + (f" ({first.entity})" if first.entity else f" ({first.rate:g})"))
+        for meter in was - now_mixed:
+            clear_shared_meter_two_prices(self.hass, meter)
+        self._shared_meter_mixed = now_mixed
 
     def _device_tariff_books(self) -> Dict[str, Any]:
         """(#812) Today's grid kWh and cost per own-tariff device, for its
@@ -19669,6 +19731,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 else float(getattr(calc, "_import_rate", 0.0) or 0.0))
             out[f"tariff_price_source_{did}"] = "own" if price is not None else "house"
             out[f"tariff_level_{did}"] = getattr(device, "_tariff_level", None)
+            # (#1417) a meter shared with other devices: its kWh none drew
+            meter = tariff_of(device).meter
+            if meter and sum(1 for d in self._surplus_controller._devices.values()
+                             if tariff_of(d).meter == meter) > 1:
+                from .device_tariff import shared_meter_id
+                out[f"tariff_meter_unassigned_kwh_{did}"] = calc.get_device_tariff(
+                    shared_meter_id(meter), day)["daily_grid_kwh"]
         return out
 
     def _comfort_split_for(self, device, now):

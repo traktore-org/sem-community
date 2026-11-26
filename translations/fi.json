@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automaatiot käyttävät vanhoja lataustilan nimiä",
       "description": "SEM:n lataustilat ovat nyt Aurinko, Aurinko + tariffi, Nyt ja Pois. Home Assistant hylkää vanhat nimet select.select_option-kutsussa, eikä vanhaan nimeen sidottu laukaisin enää laukea. Muuta nämä: {uses} SEM löytää useimmat kohdat. Tarkista myös blueprintit ja käyttöliittymän ulkopuolella tehdyt automaatiot."
+    },
+    "shared_meter_two_prices": {
+      "title": "Yksi mittari kahdella hinnalla: {meter}",
+      "description": "Laitteet {devices} jakavat mittarin {meter}, mutta niillä on eri hinnat. Mittarilla on yksi hinta, joten SEM käyttää laitteen {used} hintaa kaikille. Anna kaikille sama hinta kohdassa Laitteen tariffi."
     }
   },
   "selector": {

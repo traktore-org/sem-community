@@ -105,6 +105,7 @@ CALCULATOR_STATE_KEYS: tuple[str, ...] = (
     "ev_counter_baselines",
     # (#812) a device's own meter baseline: without it the first step after
     # every restart is re-baselined and its kWh are never priced
+    "meter_members",   # (#1417)
     "device_meter_last",
     # (#1228) an own meter's step over an outage, waiting for the house rows
     # over the same time: lost, a restart inside the wait drops it

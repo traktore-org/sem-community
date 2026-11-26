@@ -214,7 +214,9 @@ def build_charger_view(
         grid_import_known=not bool(
             getattr(power_reading, "grid_power_unavailable", False)),
         is_night=fleet_state.is_night,
-        tariff_level=fleet_state.tariff_level,
+        # (#1417) a charger on its own tariff reads its own level
+        tariff_level=(getattr(fleet_state, "charger_tariff_levels", None) or {}).get(
+            str(charger_id), fleet_state.tariff_level),
         # (#747) the peak posture rides the one-place thread.
         peak_state=getattr(fleet_state, "peak_state", "normal"),
         # (#864) so does the slot-budget allowance.

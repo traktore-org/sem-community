@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automatyzacje używają starych nazw trybu ładowania",
       "description": "Tryby ładowania SEM to teraz Słońce, Słońce + taryfa, Teraz i Wył. Home Assistant odrzuca stare nazwy w select.select_option, a wyzwalacz na starej nazwie już nie działa. Zmień te: {uses} SEM znajduje większość miejsc. Sprawdź też blueprinty i automatyzacje utworzone poza interfejsem."
+    },
+    "shared_meter_two_prices": {
+      "title": "Jeden licznik z dwiema cenami: {meter}",
+      "description": "Urządzenia {devices} dzielą licznik {meter}, ale mają różne ceny. Licznik ma jedną cenę, więc SEM używa ceny {used} dla wszystkich. Ustaw wszystkim tę samą cenę w Taryfie urządzenia."
     }
   },
   "selector": {

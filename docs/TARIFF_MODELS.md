@@ -132,3 +132,37 @@ Set it on the device, under **Device tariff**.
   meter, SEM estimates the grid share.
 - If the own price entity cannot be read, SEM uses the own rate. With no own
   rate, it uses the house tariff until the price reads again.
+- A **car charger** has the same three fields, on its card under **More**.
+  Its plan, its cheap and peak hours and its cost then follow its own price.
+
+### Two meters: Messkonzept 8 and 12
+
+Some houses have a second meter with a cheaper price for the heat pump, and
+sometimes the car too.
+
+| Setup | Meters | What SEM does |
+|---|---|---|
+| **Messkonzept 8** | The main meter counts everything. A sub-meter counts the heat pump. | Give the heat pump the sub-meter as its own meter. |
+| **Messkonzept 12** (cascade) | One meter for the house, one for the heat pump and the chargers. | Give the heat pump AND each charger the same own meter and price. |
+
+```
+grid ── main meter ──┬── house            (house price)
+                     └── second meter ──┬── heat pump   (second price)
+                                        └── car charger (second price)
+```
+
+- **One meter, several devices:** SEM reads the meter once and books it like
+  any own meter: a meter that moves in whole ticks, or late, is spread over the
+  time since it last moved, and a step over time SEM was down waits for the
+  house counters of that time. Each step is split between the devices by
+  what each used over that same time.
+- **One meter, one price:** all devices on a meter must have the same price.
+  If they do not, SEM uses the first device's price and a Repair names them.
+- **What none of them used** stays on that meter, at its price. Each device's
+  cost sensor shows it as `shared_meter_unassigned_kwh_today`.
+- **The house:** its grid kWh at the house price = the grid import minus
+  everything booked to own tariffs. Never below 0.
+- **Name the meter a device is directly behind.** Meters inside meters
+  (a sub-meter behind the cascade meter, each named by different devices)
+  are not supported: the inner meter's kWh would also count on the outer
+  meter's unassigned row.

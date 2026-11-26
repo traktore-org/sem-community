@@ -59,6 +59,9 @@ def _ids(hass):
 #: Every Repair keyed on one thing (an entity, a device, a contact) → what
 #: clears it once that thing leaves SEM. A new keyed Repair must answer.
 KEYED = {
+    "raise_shared_meter_two_prices":
+        "#1417: the coordinator clears it when the meter's devices agree or "
+        "it is no longer shared; the Repair is non-persistent, a restart drops it",
     "raise_sensor_unavailable": "#1140 sweep: the entities the reader reads",
     "raise_sensor_stale": "#1140 sweep: the entities the reader reads",
     "raise_battery_control_write_not_taken":

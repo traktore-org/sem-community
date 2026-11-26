@@ -2160,6 +2160,10 @@
     "old_charge_mode_names": {
       "title": "Automatizări folosesc nume vechi ale modului de încărcare",
       "description": "Modurile de încărcare SEM sunt acum Soare, Soare + tarif, Acum și Oprit. Home Assistant refuză numele vechi în select.select_option, iar un declanșator pe un nume vechi nu mai pornește. Modifică acestea: {uses} SEM găsește majoritatea locurilor. Verifică și blueprinturile și automatizările făcute în afara interfeței."
+    },
+    "shared_meter_two_prices": {
+      "title": "Un contor cu două prețuri: {meter}",
+      "description": "Dispozitivele {devices} împart contorul {meter}, dar au prețuri diferite. Un contor are un singur preț, așa că SEM folosește prețul lui {used} pentru toate. Dați-le tuturor același preț la Tariful dispozitivului."
     }
   },
   "selector": {

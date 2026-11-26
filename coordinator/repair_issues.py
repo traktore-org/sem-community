@@ -248,6 +248,8 @@ _ENTITY_ID_RE = re.compile(
 #: tests/test_831_repair_next_step.py — every anchor must resolve to a real
 #: heading, the #219 lesson shape.
 _DOCS_ANCHORS = {
+    # (#1417) devices that share one meter carry different prices
+    "shared_meter_two_prices": "one-meter-shows-two-prices",
     # (#1369) the tank draws power but does not warm
     "heater_no_rise": "the-hot-water-tank-draws-power-but-does-not-warm",
     # (#1369) the user's stop sits below the Legionella target
@@ -2226,3 +2228,33 @@ def clear_legionella_below_stop(hass: HomeAssistant, tank_id: str) -> None:
         ir.async_delete_issue(hass, DOMAIN, _legionella_stop_issue_id(tank_id))
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete failed for legionella stop %s: %s", tank_id, e)
+
+
+def _shared_meter_issue_id(meter: str) -> str:
+    return "shared_meter_two_prices_" + "".join(
+        ch if ch.isalnum() else "_" for ch in str(meter).lower())
+
+
+def raise_shared_meter_two_prices(hass: HomeAssistant, meter: str, *,
+                                  devices: str, used: str) -> None:
+    """(#1417) Devices that share one own meter carry different prices. One
+    meter has one price: SEM uses the first device's for all of them."""
+    try:
+        ir.async_create_issue(
+            hass, domain=DOMAIN, issue_id=_shared_meter_issue_id(meter),
+            is_fixable=False, is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="shared_meter_two_prices",
+            learn_more_url=next_step_url("docs", "shared_meter_two_prices", **_versions(hass)),
+            translation_placeholders={"meter": str(meter), "devices": devices,
+                                      "used": used},
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create (shared_meter_two_prices): %s", e)
+
+
+def clear_shared_meter_two_prices(hass: HomeAssistant, meter: str) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _shared_meter_issue_id(meter))
+    except Exception:  # noqa: BLE001
+        pass

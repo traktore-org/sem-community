@@ -58,6 +58,7 @@ DOCS_SIDE = {
     # (#870) the three SOC zones are out of ascending order — the docs say
     # what each zone means and that any values are fine as long as they rise
     "soc_zones_out_of_order",
+    "shared_meter_two_prices",           # (#1417) devices on one meter, two prices
     "battery_platform_pinned_generic",   # (#900) the wizard pinned it — docs say how to unpin
     "battery_operating_mode_unexpected",
     "sensor_unavailable", "sensor_stale", "no_forecast_integration",
