@@ -5264,7 +5264,10 @@ class EnergyCalculator:
         and fix the split of the step booked this cycle: each member's use
         since the read the step is spread from (the same span the #1230
         spread prices), else since the last read."""
-        cum = self.meter_members_cum.setdefault(e.device_id, {})
+        meter_id = str(e.device_id)
+        if meter_id not in self.meter_members_cum:
+            self.meter_members_cum[meter_id] = {}
+        cum = self.meter_members_cum[meter_id]
         before = dict(cum)
         for did, watts in e.members:
             w = _as_float(watts)
