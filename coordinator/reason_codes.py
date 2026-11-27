@@ -39,6 +39,12 @@ CHARGER_DEADLINE = "charger_deadline"
 CHARGER_TOP_UP = "charger_top_up"
 #: (#1411) a thin sun hour: the spare sun plus the grid for the rest
 CHARGER_SUN_PLUS_GRID = "charger_sun_plus_grid"
+# (#1440) the thin-sun rule said no in a planned sun + grid block: why
+CHARGER_THIN_SUN_BATTERY = "charger_thin_sun_battery"
+CHARGER_THIN_SUN_BATTERY_PAYS = "charger_thin_sun_battery_pays"
+CHARGER_THIN_SUN_LATER = "charger_thin_sun_later"
+CHARGER_THIN_SUN_PEAK = "charger_thin_sun_peak"
+CHARGER_THIN_SUN_UNKNOWN = "charger_thin_sun_unknown"
 CHARGER_NO_NIGHT = "charger_no_night"
 CHARGER_PEAK_PAUSE = "charger_peak_pause"
 CHARGER_PEAK_SLOW = "charger_peak_slow"
