@@ -818,6 +818,12 @@ class LoadManagementData:
     controlled_tariff_status: str = "unknown"
     load_management_recommendation: str = "none"
     power_charge_cost: float = 0.0
+    #: (#1438) the start of the month ``power_charge_cost`` counts, from
+    #: the load manager's same snapshot (its ``last_reset``); None with no
+    #: load manager. Left open (a decision): then the charge reads 0, not
+    #: unknown, so switching load management off mid-month books it once
+    #: as a minus.
+    power_charge_month_start: Optional[str] = None
     peak_trend: str = "stable"
     tariff_type: str = "unknown"
     # (#657) The managed-device table the load-management card renders.
@@ -1594,6 +1600,7 @@ class SEMData:
             "controlled_tariff_status": self.load_management.controlled_tariff_status,
             "load_management_recommendation": self.load_management.load_management_recommendation,
             "power_charge_cost": self.load_management.power_charge_cost,
+            "power_charge_month_start": self.load_management.power_charge_month_start,
             "peak_trend": self.load_management.peak_trend,
             "tariff_type": self.load_management.tariff_type,
             "load_management_devices": self.load_management.devices,

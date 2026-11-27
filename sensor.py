@@ -105,6 +105,16 @@ SESSION_SENSOR_STARTS = {
 }
 _CHARGER_SESSION_ENERGY = re.compile(r"charger_(.+)_session_energy")
 
+#: (#1438) TOTAL sensors whose period another module starts, at its own
+#: moment. The power charge falls to the new month's charge when load
+#: management books the month's first slot, near 00:15 on the 1st, not at
+#: midnight; a midnight ``last_reset`` counted last month's charge again
+#: under the new month and booked the fall as a minus. Its start is the
+#: month that peak belongs to, published with it.
+MODULE_PERIOD_SENSOR_STARTS = {
+    "power_charge_cost": "power_charge_month_start",
+}
+
 
 def _local_zone():
     """The home's time zone: a start saved with no offset is local time."""
@@ -114,12 +124,15 @@ def _local_zone():
 
 def period_start_key(sensor_key: str) -> Optional[str]:
     """(#1432/#1436) The data key that says when the period ``sensor_key``
-    counts began — a device's sunrise day, month or year, or a session —
-    or None for a sensor with no such start."""
+    counts began — a device's sunrise day, month or year, a session, or
+    (#1438) a period another module starts — or None for a sensor with no
+    such start."""
     if sensor_key in DEVICE_DAY_SENSOR_STARTS:
         return DEVICE_DAY_SENSOR_STARTS[sensor_key]
     if sensor_key in SESSION_SENSOR_STARTS:
         return SESSION_SENSOR_STARTS[sensor_key]
+    if sensor_key in MODULE_PERIOD_SENSOR_STARTS:
+        return MODULE_PERIOD_SENSOR_STARTS[sensor_key]
     found = _CHARGER_SESSION_ENERGY.fullmatch(sensor_key)
     if found:
         return f"charger_{found.group(1)}_session_start"
@@ -140,7 +153,7 @@ RESET_UNTOLD_TOTAL_KEYS = frozenset({
 #: period's start; (#1437) the guard against a step back uses the same rule,
 #: so the hold always ends where Home Assistant starts a new period.
 _DAY_KEY_PARTS = ("daily_", "flow_", "sem_daily_", "home_consumption_energy_daily")
-_MONTH_KEY_PARTS = ("monthly_", "home_consumption_energy_monthly", "power_charge_cost")
+_MONTH_KEY_PARTS = ("monthly_", "home_consumption_energy_monthly")
 _YEAR_KEY_PARTS = ("yearly_",)
 
 
@@ -4283,8 +4296,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         day_now = self._data_now(now)
 
         # (#1432) A device row rolls at sunrise; (#1436) a session row falls
-        # to 0 when the next session starts. The start is published with the
-        # value, read from the same record, so the two move together.
+        # to 0 when the next session starts; (#1438) the power charge falls
+        # when load management books the month's first slot. The start is
+        # published with the value, read from the same record, so the two
+        # move together.
         start_key = period_start_key(sensor_key)
         if start_key is not None:
             raw = (self.coordinator.data or {}).get(start_key)

@@ -580,6 +580,8 @@ _RENAMED = {
     "controllable_devices": "controllable_devices_count",
     "devices_shed_list": "loads_currently_shed",
     "devices": "load_management_devices",
+    # (#1438) the power charge's last_reset
+    "monthly_peak_start": "power_charge_month_start",
 }
 _NOT_PUBLISHED = {
     "warning_level": "config — diagnose's option set carries warning_peak_level",
