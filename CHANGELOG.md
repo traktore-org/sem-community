@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **A battery night charge runs even when the night is too short** (#1362). The planned cheap hours now charge; before, nothing did.
+- 🐛 **The charge source goes back to your own value** (#1362). With two batteries and a slow select, it stayed on "solar only".
 - 🐛 **Sun + tariff tops up thin sun from the grid only with the battery switch off** (#1440). With it on, the battery pays.
 - 🐛 **Power charge cost no longer counts last month again on the 1st** (#1438). Its month now starts with the first 15-minute slot, like the charge.
 - 🐛 **No counter steps back inside its day** (#1437). Base load and CO₂ saved could drop by 0.01. All totals now hold, per charger too.

@@ -125,6 +125,14 @@ def plan_blocks(allocations) -> list:
     } for a in allocations]
 
 
+#: (#1362) demands whose PARTIAL plan still runs its booked hours. A night
+#: too short for the whole battery target still books the cheapest hours:
+#: uncovered, the battery's own path stops every charge, so a pack that
+#: needs the most got nothing. Its blocks only ever take the cheap hours
+#: the plan chose, and the scheduler's target still ends the charge.
+PARTIAL_RUNS = frozenset({"battery"})
+
+
 def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
     """Evaluate the trust rule for one demand id against the stamped plan.
 
@@ -176,8 +184,10 @@ def plan_gate(plan: Optional[dict], demand_id: str, now: datetime) -> PlanGate:
                     if r.get("id") == demand_id), None)
         if row is None:
             return PlanGate(reason="not in plan")
-        if row.get("status") != "fits":
-            return PlanGate(reason=f"verdict {row.get('status')}")
+        status = row.get("status")
+        if status != "fits" and not (status == "partial"
+                                     and demand_id in PARTIAL_RUNS):
+            return PlanGate(reason=f"verdict {status}")
 
         in_block = False
         block_power = 0.0
