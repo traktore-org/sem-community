@@ -1367,12 +1367,13 @@ THIN_SUN_HELD_CODES: Dict[str, str] = {
     "battery_pays": RC.CHARGER_THIN_SUN_BATTERY_PAYS,
     "not_cheaper": RC.CHARGER_THIN_SUN_LATER,
     "never_pays": RC.CHARGER_THIN_SUN_LATER,
-    "forecast_covers": RC.CHARGER_THIN_SUN_LATER,
+    "forecast_covers": RC.CHARGER_THIN_SUN_SUN_LATER,
     "no_grid_room": RC.CHARGER_THIN_SUN_PEAK,
     "peak_limit": RC.CHARGER_THIN_SUN_PEAK,
     "export_unknown": RC.CHARGER_THIN_SUN_UNKNOWN,
     "forecast_unknown": RC.CHARGER_THIN_SUN_UNKNOWN,
     "price_unknown": RC.CHARGER_THIN_SUN_UNKNOWN,
+    "price_unread": RC.CHARGER_THIN_SUN_UNKNOWN,
 }
 #: (#1440) The "no"s that keep the sun-only reason and code: the reason
 #: already is the cause (too little sun) — the reason text names the word.
@@ -1481,7 +1482,8 @@ def _thin_sun_top_up(view: "ChargerView",
                   f"for the cheapest later hour")
     else:
         priced = "prices not read this cycle"
-    held = " (minimum block: holding)" if why == "held" else ""
+    held = {"held": " (minimum block: holding)",
+            "bridged": " (price gap: bridged)"}.get(why, "")
     return replace(
         grid,
         # The rule priced the MINIMUM (every watt above it is pure grid at

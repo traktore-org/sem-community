@@ -34,8 +34,8 @@ from .test_1411_thin_sun_rule import FLAT, _view
 ROOT = Path(decide_mod.__file__).resolve().parents[1]
 NEW_CODES = (
     RC.CHARGER_THIN_SUN_BATTERY, RC.CHARGER_THIN_SUN_BATTERY_PAYS,
-    RC.CHARGER_THIN_SUN_LATER, RC.CHARGER_THIN_SUN_PEAK,
-    RC.CHARGER_THIN_SUN_UNKNOWN,
+    RC.CHARGER_THIN_SUN_LATER, RC.CHARGER_THIN_SUN_SUN_LATER,
+    RC.CHARGER_THIN_SUN_PEAK, RC.CHARGER_THIN_SUN_UNKNOWN,
 )
 
 
@@ -62,7 +62,7 @@ class TestTheHeldBlockSaysWhy:
          RC.CHARGER_THIN_SUN_BATTERY_PAYS, "battery_would_pay"),
         # strong sun later today covers the car for free
         ({}, replace(FLAT, strong_sun_kwh=12.0),
-         RC.CHARGER_THIN_SUN_LATER, "forecast_covers"),
+         RC.CHARGER_THIN_SUN_SUN_LATER, "forecast_covers"),
         # net metering: the blend is never cheaper
         ({}, ThinSun(export_price=0.30, import_now=0.30, cheapest_later=0.30,
                      strong_sun_kwh=0.0, in_block=True),
@@ -73,6 +73,13 @@ class TestTheHeldBlockSaysWhy:
         # no forecast
         ({}, replace(FLAT, strong_sun_kwh=None),
          RC.CHARGER_THIN_SUN_UNKNOWN, "forecast_unknown"),
+        # (review) an import price or the later hour not read: a start
+        # never buys on it, and the card says the price is unknown — not
+        # "later is cheaper"
+        ({}, replace(FLAT, import_now=None),
+         RC.CHARGER_THIN_SUN_UNKNOWN, "price_unread"),
+        ({}, replace(FLAT, cheapest_later=None),
+         RC.CHARGER_THIN_SUN_UNKNOWN, "price_unread"),
     ])
     def test_each_cause_in_a_booked_block(self, kw, thin, code, why):
         v = _view(thin_sun=thin, **kw)
@@ -117,6 +124,58 @@ class TestTheHeldBlockSaysWhy:
 
 
 @pytest.mark.unit
+class TestAShortPriceGapIsBridged:
+    """(review) Past the minimum block one unread price stopped a running
+    session as ``not_cheaper``; the window (``price_unknown``) is what
+    ends it."""
+    PAST = replace(FLAT, session_s=1200.0, min_block_s=900.0)
+
+    def test_the_verdict(self):
+        for gap in (dict(import_now=None), dict(cheapest_later=None),
+                    dict(export_price=None)):
+            t = replace(self.PAST, **gap)
+            assert ts.thin_sun_verdict(t, sun_w=1000.0, min_w=4140.0,
+                                       need_kwh=5.0, running=True) == (True, "bridged"), gap
+            # mostly unreadable over the window ends it
+            assert ts.thin_sun_verdict(replace(t, price_blind_share=0.6),
+                                       sun_w=1000.0, min_w=4140.0, need_kwh=5.0,
+                                       running=True) == (False, "price_unknown")
+            # a start never buys on it
+            assert ts.thin_sun_verdict(replace(t, session_s=None), sun_w=1000.0,
+                                       min_w=4140.0, need_kwh=5.0)[0] is False
+
+    def test_the_car_keeps_charging(self):
+        v = _view(thin_sun=replace(self.PAST, import_now=None))
+        v = replace(v, power=replace(v.power, charging=True, power_w=4100.0))
+        d = decide(v)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.reason_code == RC.CHARGER_SUN_PLUS_GRID
+        assert "prices not read this cycle" in d.reason
+        assert "price gap: bridged" in d.reason
+
+    def test_a_long_gap_ends_it_and_says_so(self):
+        v = _view(thin_sun=replace(self.PAST, import_now=None,
+                                   price_blind_share=0.6))
+        v = replace(v, power=replace(v.power, charging=True, power_w=4100.0))
+        d = decide(v)
+        assert d.intent is ChargerIntent.IDLE
+        assert d.reason_code == RC.CHARGER_THIN_SUN_UNKNOWN
+        assert "price_unknown" in d.reason
+
+
+@pytest.mark.unit
+class TestBatteryHelpOn:
+    def test_only_the_reason_changes(self):
+        """The help-on strategy runs the same day rule: in a block, the
+        held reason replaces the sun-only one, never the decision."""
+        v = _view(mode="min_plus_solar", battery_soc=50, battery_charge_w=900.0)
+        d = decide(v)
+        base = decide(_outside_block(v))
+        assert d.reason_code == RC.CHARGER_THIN_SUN_BATTERY
+        _same_but_reason(d, base)
+
+
+@pytest.mark.unit
 class TestTheSunOnlyReasonStands:
     def test_no_rule_inputs(self):
         d = decide(_view(thin_sun=None))
@@ -158,13 +217,15 @@ def _verdict_no_words():
     source, plus the hard words ``_thin_sun_top_up`` hands it."""
     words = set()
     tree = ast.parse(inspect.getsource(ts.thin_sun_verdict))
-    for node in ast.walk(tree):
-        if (isinstance(node, ast.Return) and isinstance(node.value, ast.Tuple)
-                and len(node.value.elts) == 2):
-            first, second = node.value.elts
-            if (isinstance(first, ast.Constant) and first.value is False
-                    and isinstance(second, ast.Constant)):
-                words.add(second.value)
+    returns = [n.value for n in ast.walk(tree)
+               if isinstance(n, ast.Return) and n.value is not None]
+    for value in returns:           # a tuple anywhere in it: `a if c else b`
+        for node in ast.walk(value):
+            if isinstance(node, ast.Tuple) and len(node.elts) == 2:
+                first, second = node.elts
+                if (isinstance(first, ast.Constant) and first.value is False
+                        and isinstance(second, ast.Constant)):
+                    words.add(second.value)
     tree = ast.parse(inspect.getsource(decide_mod._thin_sun_top_up))
     for node in ast.walk(tree):
         if (isinstance(node, ast.Assign)
@@ -179,7 +240,7 @@ def test_every_no_of_the_rule_is_placed_once():
     """A new "no" in the rule must say where its reason goes, or CI fails."""
     words = _verdict_no_words()
     assert {"battery_takes_sun", "peak_limit", "battery_pays",
-            "no_plan_block", "not_cheaper"} <= words      # the scan works
+            "no_plan_block", "not_cheaper", "price_unread"} <= words  # the scan works
     held, keeps, not_asked = (set(THIN_SUN_HELD_CODES), set(THIN_SUN_KEEPS_CODE),
                               set(THIN_SUN_NOT_ASKED))
     assert not (held & keeps) and not (held & not_asked) and not (keeps & not_asked)

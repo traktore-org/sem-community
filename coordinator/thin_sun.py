@@ -254,7 +254,8 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
     """The live gate's answer → ``(fires, why)``.
 
     ``why`` is a short machine word for the reason text and the tests:
-    ``ok``, ``held``, or the first condition that said no.
+    ``ok``, ``held``, ``bridged`` (a running session over a short price
+    gap), or the first condition that said no.
 
     HARD limits (``HARD_LIMITS``, the one list) end a session at once.
     ``hard`` carries the two only ``decide`` can see — the peak limit
@@ -316,7 +317,12 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
         return (False, "no_sun")
     if sun_w >= min_w:
         return (False, "strong_sun")
-    if t.export_price is None:
+    # a price this cycle could not read. A running session rides it: the
+    # window above (``price_unknown``) is what ends it. A start never buys
+    # on a price it could not read.
+    gap = (t.export_price is None or t.import_now is None
+           or t.cheapest_later is None)
+    if t.export_price is None and not run:
         return (False, "export_unknown")
     if t.strong_sun_kwh is None:
         return (False, "forecast_unknown")
@@ -328,6 +334,11 @@ def thin_sun_verdict(t: Optional[ThinSun], *, sun_w: float, min_w: float,
     if (not run and grid_room_w is not None
             and (min_w - sun_w) > float(grid_room_w)):
         return (False, "no_grid_room")
+    if gap:
+        # (#1440 review) Until #1440 the gap fell through to ``not_cheaper``
+        # (``thin_sun_pays`` says no to an unknown), so past the minimum
+        # block one unread cycle stopped a running car.
+        return (True, "bridged") if run else (False, "price_unread")
     if not thin_sun_pays(sun_w=sun_w, min_w=min_w,
                          export_price=t.export_price,
                          import_price=t.import_now,
