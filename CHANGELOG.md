@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **Power charge cost no longer counts last month again on the 1st** (#1438). Its month now starts with the first 15-minute slot, like the charge.
 - 🐛 **No counter steps back inside its day** (#1437). Base load and CO₂ saved could drop by 0.01. All totals now hold, per charger too.
 - 🐛 **A load above the car holds back only the sun it would get** (#1435). Battery charge no longer counts, and the car's offer stops jumping.
 
