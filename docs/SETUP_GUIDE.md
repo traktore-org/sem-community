@@ -257,6 +257,8 @@ The scheduler charges the battery from the grid in cheap hours, before a day wit
 
 It needs price data and a battery that SEM can charge from the grid. Without a solar forecast, SEM counts solar as 0.
 
+If the cheap hours tonight are too few to fill the battery, SEM still charges in them.
+
 ### Battery charged by its operating mode or backup reserve
 
 Some batteries have no single **charge from the grid** switch. For these, SEM sets up to three entities and puts the old values back when the charge stops:
@@ -281,7 +283,7 @@ Some inverters have no number that limits discharge, only a mode select. One opt
 | **Discharge-hold select** | The mode select. |
 | **Option that stops discharge** | The option that keeps the battery, such as `Utility`. |
 
-Turn on **House as a battery sink**. SEM then keeps the battery in cheap hours for the dear hours that follow, and puts the select back after. A hand change is left alone. SEM writes the select at most 12 times a day and checks that the hold works.
+Turn on **House as a battery sink**. SEM then keeps the battery in cheap hours for the dear hours that follow, and puts the select back after. A hand change is left alone. SEM writes the select at most 12 times a day for holds and checks that the hold works. A planned grid charge still runs after that.
 
 Some inverters charge from the grid only in this mode. So a grid charge also sets the hold option, and the next normal cycle puts the mode back.
 
