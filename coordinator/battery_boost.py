@@ -70,8 +70,8 @@ def start_boost(charger_id: str, charger_cfg: Mapping[str, Any],
     ``connected`` is the plan layer's tri-state: only a definite False
     refuses — a charger without a plug sensor can still be boosted, and an
     unplug ends the boost the moment it is seen."""
-    from .build_view import _battery_may_assist_ev
-    if not _battery_may_assist_ev(config, charger_cfg):
+    from .build_view import _battery_boost_allowed
+    if not _battery_boost_allowed(config, charger_cfg):
         raise BoostRefused("battery_boost_not_permitted", charger=charger_id)
     if connected is False:
         raise BoostRefused("battery_boost_not_connected", charger=charger_id)

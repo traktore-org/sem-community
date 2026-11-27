@@ -255,6 +255,9 @@ class TestThePlanBooksGridInSunOnlyForTheMinFloor:
         monkeypatch.setattr(energy_planner, "pack_night", spy)
         fake = _fake_self()
         fake._tariff_optimized_for = lambda cfg: True
+        # (#1440) the help-off strategy: only it books grid in a sun hour
+        for c in fake.config.get("ev_chargers") or []:
+            c.setdefault("charge_mode", "solar_plus_cheap")
         from unittest.mock import MagicMock
         SEMCoordinator._shadow_energy_plan(
             fake, _scheduler(), energy=MagicMock(), power=_power())
