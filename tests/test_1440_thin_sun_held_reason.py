@@ -133,9 +133,14 @@ class TestAShortPriceGapIsBridged:
     def test_the_verdict(self):
         for gap in (dict(import_now=None), dict(cheapest_later=None),
                     dict(export_price=None)):
+            # a real session past its block always has a window share: one
+            # blind cycle, up to half of the window
+            for share in (None, 0.03, 0.2, 0.5):
+                t = replace(self.PAST, price_blind_share=share, **gap)
+                assert ts.thin_sun_verdict(
+                    t, sun_w=1000.0, min_w=4140.0, need_kwh=5.0,
+                    running=True) == (True, "bridged"), (gap, share)
             t = replace(self.PAST, **gap)
-            assert ts.thin_sun_verdict(t, sun_w=1000.0, min_w=4140.0,
-                                       need_kwh=5.0, running=True) == (True, "bridged"), gap
             # mostly unreadable over the window ends it
             assert ts.thin_sun_verdict(replace(t, price_blind_share=0.6),
                                        sun_w=1000.0, min_w=4140.0, need_kwh=5.0,
@@ -144,8 +149,30 @@ class TestAShortPriceGapIsBridged:
             assert ts.thin_sun_verdict(replace(t, session_s=None), sun_w=1000.0,
                                        min_w=4140.0, need_kwh=5.0)[0] is False
 
+    @pytest.mark.parametrize("change, kw, why", [
+        # every check that is not about a price still answers first
+        (dict(in_block=False, block_near=False), {}, "no_plan_block"),
+        ({}, dict(battery_charge_w=700.0), "battery_takes_sun"),
+        ({}, dict(battery_charge_w=1500.0), "battery_takes_sun"),
+        ({}, dict(pack_could_pay=True), "battery_would_pay"),
+        ({}, dict(sun_w=20.0), "no_sun"),
+        (dict(sun_mean_w=20.0), {}, "sun_gone"),
+        ({}, dict(sun_w=5000.0), "strong_sun"),
+        (dict(strong_sun_kwh=None), {}, "forecast_unknown"),
+        (dict(strong_sun_kwh=12.0), {}, "forecast_covers"),
+        ({}, dict(hard="peak_limit"), "peak_limit"),
+        ({}, dict(hard="battery_pays"), "battery_pays"),
+        ({}, dict(need_kwh=0.0), "no_need"),
+    ])
+    def test_a_gap_never_outranks_another_no(self, change, kw, why):
+        t = replace(self.PAST, import_now=None, price_blind_share=0.03, **change)
+        args = dict(sun_w=1000.0, min_w=4140.0, need_kwh=5.0, running=True)
+        args.update(kw)
+        assert ts.thin_sun_verdict(t, **args) == (False, why)
+
     def test_the_car_keeps_charging(self):
-        v = _view(thin_sun=replace(self.PAST, import_now=None))
+        v = _view(thin_sun=replace(self.PAST, import_now=None,
+                                   price_blind_share=0.03))
         v = replace(v, power=replace(v.power, charging=True, power_w=4100.0))
         d = decide(v)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
