@@ -416,7 +416,11 @@ def _spare_sun_of(view: Any) -> Optional[float]:
 
 
 #: (#1411) The mode whose day decisions may carry a thin-sun session.
-_THIN_SUN_MODE = "solar_plus_cheap"
+#: (#1440) Both stored strategies behind "Sun + tariff" run the one day
+#: rule (#1381 D23): help off ``solar_plus_cheap``, help on ``min_plus_solar``.
+#: Until #1440 only the help-off one was listed, so every session of a
+#: charger with the battery switch on was dropped on its first cycle.
+_THIN_SUN_MODES = frozenset({"solar_plus_cheap", "min_plus_solar"})
 
 
 def _note_thin_sun(host: Any, cid: str, decision: Any,
@@ -462,7 +466,7 @@ def _note_thin_sun(host: Any, cid: str, decision: Any,
         rec = sessions.get(key)
         if not isinstance(rec, dict):
             rec = None
-        if (is_night or getattr(decision, "mode", None) != _THIN_SUN_MODE
+        if (is_night or getattr(decision, "mode", None) not in _THIN_SUN_MODES
                 or not (thin or (sun_funded and rec is not None))):
             sessions.pop(key, None)
             return
@@ -12949,7 +12953,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         if boost is None:
             return
         from .battery_boost import boost_end_reason
-        from .build_view import _battery_may_assist_ev
+        from .build_view import _battery_boost_allowed
         cfg = self._charger_cfg_by_id(boost.charger_id)
         if cfg is None:
             self.stop_battery_boost("charger removed")
@@ -12961,7 +12965,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             connected=self._plan_ev_connected(boost.charger_id, cfg, power),
             mode=self._effective_charge_mode_for(cfg),
             soc=soc,
-            may_assist=_battery_may_assist_ev(self.config, cfg))
+            may_assist=_battery_boost_allowed(self.config, cfg))
         if reason:
             self.stop_battery_boost(reason)
 
@@ -13090,7 +13094,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         default time, each weekday's own, the departure tonight is planned
         for, the two plan knobs, the stamped top-up (when the plan covers
         the car) and whether the battery may be boosted into it (D5)."""
-        from .build_view import _battery_may_assist_ev
+        from .build_view import _battery_boost_allowed
         cfg = charger_cfg or {}
         now = dt_util.now()
         late_min = late_charge_s(cfg) // 60
@@ -13132,7 +13136,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
             "one_block": bool(cfg.get("ev_plan_one_block", False)),
             "late_min": late_min,
             "late": late,
-            "boost_allowed": _battery_may_assist_ev(self.config, cfg),
+            "boost_allowed": _battery_boost_allowed(self.config, cfg),
         }
 
     async def _phase_guard_loads(self, power) -> None:
@@ -14608,6 +14612,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
         after startup: zero devices registered, empty target map, zero
         deficit — caught live on TEST) so the trigger retries next cycle.
         """
+        from . import build_view as _bv  # (#1440) the one battery-help reader
         try:
             from datetime import timedelta as _td
             from .energy_planner import (
@@ -14751,8 +14756,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                     # up from the grid at its import price — but only for the
                     # Min floor, the one need the live gate buys grid for
                     # (``kwh`` is that floor: bound="min", > 0.1 as in decide)
+                    # (#1440) …and only with the battery switch OFF: with it
+                    # on, the pack pays a thin sun hour and the live gate
+                    # says "battery_would_pay" — the plan must not book a
+                    # grid block the charger will never run. One reader,
+                    # ``_battery_may_assist_ev``, for plan and gate.
                     grid_in_sun=bool(_sun_tariff_day_of(self, cfg)
-                                     and float(kwh) > 0.1),
+                                     and float(kwh) > 0.1
+                                     and not _bv._battery_may_assist_ev(
+                                         self.config, cfg)),
                     # (#1417) a charger on its own tariff is planned on it —
                     # the same reader the loads and its live gate use (#812)
                     tariff=_ev_plan_tariff(self, cid),

@@ -679,8 +679,10 @@ class TestTheSessionEnds:
                             mode="always_max"))
         assert not self._alive(host)
         host = self._host(monkeypatch, block_end=_t(13))
+        # (#1440) a switch to Sun ends it; ``min_plus_solar`` is Sun +
+        # tariff with the battery switch on — the same rule, it does not
         self.mod._note_thin_sun(host, "a", _dec(RC.CHARGER_SUN,
-                                                mode="min_plus_solar"))
+                                                mode="solar_only"))
         assert not self._alive(host)
 
     def test_night_ends_it(self, monkeypatch):

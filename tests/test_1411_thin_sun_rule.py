@@ -547,6 +547,10 @@ class TestTheCoordinatorPlumbing:
                             lambda coord, energy: {"ev_charger": kwh})
         fake = _fake_self()
         fake._tariff_optimized_for = lambda cfg: optimized
+        # (#1440) the help-off strategy behind "Sun + tariff": the plan
+        # books grid in a sun hour only with the battery switch off
+        for c in fake.config.get("ev_chargers") or []:
+            c.setdefault("charge_mode", "solar_plus_cheap")
         fake._export_price_known = (
             lambda: SEMCoordinator._export_price_known(fake))
         assert SEMCoordinator._shadow_energy_plan(

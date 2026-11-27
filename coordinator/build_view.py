@@ -30,13 +30,33 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
 
 def _battery_may_assist_ev(config, charger_cfg=None) -> bool:
-    """(#778/#885/#1381) May the house battery help THIS charger's car?
+    """(#778/#885/#1381/#1440) May the house battery help THIS charger's car?
 
-    One answer, the charger's own switch (#1381): the install-wide switch
-    on the battery card is gone (a migration carried an OFF over to every
-    charger). ``battery_mode: off`` still means SEM is hands-off the battery
-    entirely, so no car gets it then. UNSET on the charger reads yes, as
-    before.
+    ONE reader: the charger's own battery switch (``battery_help_of`` — the
+    stored strategy for the four sun modes, the remembered switch for Now
+    and Off, and a per-charger "never" ``ev_battery_may_assist: False``
+    always off). Until #1440 this read only the legacy key, which reads
+    yes when unset, so the switch on the card was not part of the answer:
+    the thin-sun rule always concluded "the battery pays" and waited.
+    ``battery_mode: off`` still means SEM is hands-off the battery
+    entirely, so no car gets it then.
+    """
+    from ..consts.ev_charge_modes import battery_help_of
+    mode = str(config.get("battery_mode") or "auto").lower()
+    if mode == "off":
+        return False
+    if isinstance(charger_cfg, Mapping):
+        return bool(battery_help_of(charger_cfg))
+    return True
+
+
+def _battery_boost_allowed(config, charger_cfg=None) -> bool:
+    """(#1025/#1440) May the user's one-off battery boost feed this car?
+
+    A boost is an explicit command ("into the car down to N %"), so it is
+    refused only by the per-charger "never" (``ev_battery_may_assist:
+    False``) and by ``battery_mode: off`` — not by the battery switch,
+    which governs what SEM does on its own.
     """
     mode = str(config.get("battery_mode") or "auto").lower()
     if mode == "off":
@@ -46,6 +66,7 @@ def _battery_may_assist_ev(config, charger_cfg=None) -> bool:
         if per_charger is not None:
             return bool(per_charger)
     return True
+
 
 def build_charger_view(
     fleet_state: FleetCycleState,
