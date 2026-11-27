@@ -89,6 +89,10 @@ DECLARED_AUTHORITIES = {
                      "select is saved in the hold record WITH its local "
                      "date; a restart the same day keeps counting, one across "
                      "midnight finds yesterday's date and starts again at 0"),
+    ("coordinator/energy_calculator.py", "calculate_costs day (#1437)"):
+        ("calendar", "n/a — the costs read the day calculate_energy booked "
+                     "this cycle under (booking_day); the clock is read only "
+                     "when nothing was booked yet, and nothing is memoised"),
     ("coordinator/coordinator.py", "_tracker_date init"):
         ("calendar", "n/a — the hour arrays it guards start empty anyway; "
                      "the decay that USED to ride on it moved out in #645"),
