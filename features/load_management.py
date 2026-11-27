@@ -45,6 +45,30 @@ from ..utils.log_gate import log_on_change
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def month_start(moment: datetime) -> datetime:
+    """(#1438) The first instant of ``moment``'s calendar month, in its
+    own time zone."""
+    return moment.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def same_month(a: datetime, b: datetime) -> bool:
+    """(#1438) Two moments in one calendar month, each read in its own
+    zone: a changed time zone does not start a new month."""
+    return (a.year, a.month) == (b.year, b.month)
+
+
+def _parse_month_start(raw: Any) -> Optional[datetime]:
+    """(#1438) A saved month start as saved, with its own offset, so its
+    month is the one it names. None when absent, broken or without a
+    zone."""
+    if not isinstance(raw, str):
+        return None
+    parsed = dt_util.parse_datetime(raw)
+    if parsed is None or parsed.tzinfo is None:
+        return None
+    return month_start(parsed)
+
 STORAGE_VERSION = 1
 STORAGE_KEY = "load_management_devices"
 LEDGER_KEY = SL.LEDGER_KEY
@@ -256,6 +280,13 @@ class LoadManagementCoordinator:
         self._consecutive_peak_15min: float = 0.0  # Current 15-min rolling average (kW)
         self._monthly_consecutive_peak: float = 0.0  # Highest 15-min peak this month (kW)
         self._monthly_peak_month: Optional[int] = None  # Track which month the peak belongs to
+        #: (#1438) The start of the month the held peak belongs to — the
+        #: power charge sensor's ``last_reset``. A new month starts when its
+        #: first slot is booked (near 00:15 on the 1st), not at midnight, so
+        #: the start moves with the peak, never with the clock. Set from now
+        #: here and at load; a slot of an earlier month is not booked, so
+        #: the start never moves back.
+        self._monthly_peak_start: datetime = month_start(dt_util.now())
 
         # Callbacks for main coordinator
         self._update_callbacks = []
@@ -397,8 +428,18 @@ class LoadManagementCoordinator:
 
                 # Restore monthly peak (only if same month)
                 stored_month = data.get("monthly_peak_month")
-                current_month = dt_util.now().month
-                if stored_month == current_month:
+                now = dt_util.now()
+                current_month = now.month
+                # (#1438) the saved month start names the year too; a store
+                # from an older build has the month number only. A start of
+                # this month is kept as saved: the sensor already told it.
+                stored_start = _parse_month_start(data.get("monthly_peak_start"))
+                same = (same_month(stored_start, now) if stored_start is not None
+                        else stored_month == current_month)
+                self._monthly_peak_start = (
+                    stored_start if same and stored_start is not None
+                    else month_start(now))
+                if same:
                     self._monthly_consecutive_peak = data.get("monthly_consecutive_peak", 0.0)
                     self._monthly_peak_month = current_month
                     _LOGGER.info(
@@ -422,6 +463,8 @@ class LoadManagementCoordinator:
                 "last_updated": dt_util.now().isoformat(),
                 "monthly_consecutive_peak": self._monthly_consecutive_peak,
                 "monthly_peak_month": self._monthly_peak_month,
+                # (#1438) the month with its year: what the sensor says
+                "monthly_peak_start": self._monthly_peak_start.isoformat(),
             }
             await self._store.async_save(data)
             _LOGGER.debug("Saved device configuration to storage")
@@ -999,15 +1042,23 @@ class LoadManagementCoordinator:
         a boundary at twice what the bill sees. A slot of a new month starts
         that month's peak.
 
+        (#1438) The month is the slot's month, with its year: the start
+        ``monthly_peak_start`` publishes moves in the cycle the peak does.
+
         Returns True when the monthly peak changed (caller persists).
         """
-        month = slot_start.month
-        if self._monthly_peak_month is not None and month != self._monthly_peak_month:
+        local = dt_util.as_local(slot_start)
+        month = local.month
+        if not same_month(local, self._monthly_peak_start):
+            if local < self._monthly_peak_start:
+                # (#1438) a slot of a month already over: booking it would
+                # move the month back, and the sensor's start with it
+                return False
             _LOGGER.info(
                 "Monthly peak reset: previous month peak was %.3f kW",
                 self._monthly_consecutive_peak,
             )
-            self._monthly_consecutive_peak = 0.0
+            self._monthly_peak_start = month_start(local)
             self._monthly_peak_month = month
             self._monthly_consecutive_peak = round(float(average_kw), 3)
             return True
@@ -2662,6 +2713,8 @@ class LoadManagementCoordinator:
             "phase_held": dict(self._phase_held),
             "consecutive_peak_15min": self._consecutive_peak_15min,
             "monthly_consecutive_peak": self._monthly_consecutive_peak,
+            # (#1438) the month that peak belongs to, published with it
+            "monthly_peak_start": self._monthly_peak_start.isoformat(),
             # #433 — telemetry surface (mirrors classifier_path /
             # dampening_path pattern). Last-call decision paths so
             # users hitting an unexpected state can self-diagnose.
