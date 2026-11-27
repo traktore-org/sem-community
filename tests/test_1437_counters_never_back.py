@@ -6,9 +6,11 @@ loads) 9.29 → 9.28 kWh eight times, and the CO₂ saved 0.02 → 0.01 kg twice
 The rule now sits where every counter is published: the sensor.
 """
 import ast
-from datetime import datetime
+import math
+from datetime import date, datetime
 from itertools import pairwise
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -247,8 +249,11 @@ def test_a_lifetime_count_that_restarts_is_not_held_above_zero(mock_coordinator)
     key = "lifetime_ev_sessions"
     s = _sensor(mock_coordinator, key)
     assert s.entity_description.state_class == SensorStateClass.TOTAL_INCREASING
-    assert _publish(s, key, 50, _at(12, 0)) == 50
-    assert _publish(s, key, 0, _at(12, 1)) == 0
+    first = _publish(s, key, 50, _at(12, 0))
+    assert first == 50 and type(first) is int      # "50", not "50.0"
+    one_less = _publish(s, key, 49, _at(12, 1))
+    assert one_less == 49 and type(one_less) is int  # never 49.1 sessions
+    assert _publish(s, key, 0, _at(12, 2)) == 0
 
 
 def test_a_session_family_ends_its_hold_with_a_new_session(mock_coordinator):
@@ -291,3 +296,61 @@ def test_the_hold_and_last_reset_change_period_together(mock_coordinator):
             assert (p0 != p1) == (r0 != r1), desc.key
         checked.add(desc.key.split("_", 1)[0])
     assert {"daily", "flow", "monthly", "yearly"} <= checked
+
+
+# ── the counter's own day, not the sensor's clock ──────────────────────────
+
+def _books(mock_coordinator, day, ev_start=None):
+    mock_coordinator._energy_calculator = SimpleNamespace(
+        booking_day=day, ev_last_reset=lambda: ev_start)
+    mock_coordinator._flow_calculator = SimpleNamespace(flow_day=day)
+
+
+@pytest.mark.parametrize("key", [
+    "daily_grid_export_negative_kwh", "flow_battery_to_grid_energy"])
+def test_yesterday_published_after_midnight_is_no_floor_for_today(
+        mock_coordinator, key):
+    """A cycle reads its data at 23:59:59.6 and publishes at 00:00:00.4.
+    That value is yesterday's: it must not hold today's 0 at 0.1 all day,
+    and today's period starts with today's data, not with it."""
+    s = _sensor(mock_coordinator, key)
+    _books(mock_coordinator, date(2026, 11, 26))
+    assert _publish(s, key, 2.0, _at(23, 59)) == 2.0
+    late = datetime(2026, 11, 27, 0, 0, 0, 400000, tzinfo=ZONE)
+    assert _publish(s, key, 2.0, late) == 2.0
+    with patch.object(dt_util, "now", return_value=late):
+        assert s.last_reset == _at(0, 0, day=26)      # still yesterday's day
+    _books(mock_coordinator, date(2026, 11, 27))
+    assert _publish(s, key, 0.0, _at(0, 0, day=27)) == 0.0
+    assert _publish(s, key, 0.0, _at(18, 0, day=27)) == 0.0
+    with patch.object(dt_util, "now", return_value=_at(18, 0, day=27)):
+        assert s.last_reset == _at(0, 0, day=27)
+
+
+def test_the_car_day_row_holds_by_the_car_day(mock_coordinator):
+    key = "daily_ev_energy"
+    s = _sensor(mock_coordinator, key)
+    day_start = _at(7, 0, day=26)
+    _books(mock_coordinator, date(2026, 11, 27), ev_start=day_start)
+    assert _publish(s, key, 9.50, _at(6, 0, day=27)) == 9.50
+    assert _publish(s, key, 9.49, _at(6, 1, day=27)) == 9.50   # held
+    _books(mock_coordinator, date(2026, 11, 27), ev_start=_at(7, 0, day=27))
+    assert _publish(s, key, 0.0, _at(7, 0, day=27)) == 0.0     # new car day
+
+
+def test_a_value_that_is_not_a_number_is_no_floor(mock_coordinator):
+    key = "daily_true_baseload_energy"
+    s = _sensor(mock_coordinator, key)
+    assert _publish(s, key, 5.0, _at(12, 0)) == 5.0
+    assert math.isnan(_publish(s, key, float("nan"), _at(12, 1)))
+    assert _publish(s, key, 4.99, _at(12, 2)) == 5.0
+    assert _publish(s, key, 5.2, _at(12, 3)) == 5.2
+
+
+def test_a_small_charger_day_dip_is_held_not_read_as_a_reset(mock_coordinator):
+    """Home Assistant reads a TOTAL_INCREASING fall below 90 % as a reset
+    and counts the value again: 0.09 → 0.08 kWh is held."""
+    key = "charger_c2_daily_energy"
+    s = _built(mock_coordinator, key, SensorStateClass.TOTAL_INCREASING)
+    assert _publish(s, key, 0.09, _at(10, 0)) == 0.09
+    assert _publish(s, key, 0.08, _at(10, 1)) == 0.09
