@@ -428,14 +428,28 @@ class TestFinding3OneTrackerClockSlots:
         for _ in range(100):
             lm._update_peak_tracking(8000.0)
         assert lm._monthly_consecutive_peak == 0.0
+        lm._monthly_peak_start = _month_of(datetime(2026, 10, 8))   # (#1438)
         assert lm.record_closed_slot(datetime(2026, 10, 8, 14, 0), 2.667)
         assert lm.record_closed_slot(datetime(2026, 10, 8, 14, 15), 2.0) is False
         assert lm._monthly_consecutive_peak == pytest.approx(2.667)
 
     def test_a_new_month_starts_from_its_first_slot(self, lm):
+        # (#1438) a manager that runs in October: it holds that month
+        lm._monthly_peak_start = _month_of(datetime(2026, 10, 31))
         lm.record_closed_slot(datetime(2026, 10, 31, 23, 45), 6.0)
+        assert lm._monthly_consecutive_peak == pytest.approx(6.0)
         lm.record_closed_slot(datetime(2026, 11, 1, 0, 0), 1.5)
         assert lm._monthly_consecutive_peak == pytest.approx(1.5)
+
+
+def _month_of(moment):
+    """(#1438) The month start a load manager holds, for a local moment."""
+    from homeassistant.util import dt as dt_util
+
+    from custom_components.solar_energy_management.features.load_management import (
+        month_start,
+    )
+    return month_start(dt_util.as_local(moment))
 
 
 @pytest.fixture

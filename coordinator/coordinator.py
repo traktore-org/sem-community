@@ -20465,6 +20465,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin):
                 # Calculate demand charge from monthly peak
                 demand_rate = self.config.get("demand_charge_rate", 0.0)
                 lm_data.power_charge_cost = round(lm_data.monthly_consecutive_peak * demand_rate, 2)
+                # (#1438) …and the month that peak belongs to, set with the
+                # charge: its last_reset moves when the peak does, near
+                # 00:15 on the 1st, not at midnight
+                lm_data.power_charge_month_start = lm_info.get("monthly_peak_start")
 
             except Exception as e:
                 _LOGGER.debug("Could not get load management data: %s", e)
