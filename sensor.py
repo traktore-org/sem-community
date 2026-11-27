@@ -14,6 +14,7 @@ from .consts.core import (
     SENSOR_DARK_READ_GRACE_S,
 )
 from .utils.attr_budget import fit_state_attributes
+from .utils.never_back import NEVER_BACK_KEYS, never_back
 from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
@@ -2860,6 +2861,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     _reset_told = None
     _reset_floor = None
     _reset_seen = None      # the last start seen in this run
+    # (#1437) the value last published in its period, and that period
+    _nb_floor = None
+    _nb_period = None
     _attr_should_poll = False
     _attr_has_entity_name = True
 
@@ -3068,6 +3072,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         # This is safe because daily reset in coordinator will handle stale data
                         self._attr_native_value = float(restored_value)
                         self._attr_native_unit_of_measurement = last_sensor_data.native_unit_of_measurement
+                        self._restore_not_back(float(restored_value))
                         _LOGGER.info(
                             f"Restored {self.entity_description.key} to {restored_value} "
                             f"with unit {last_sensor_data.native_unit_of_measurement}"
@@ -3284,6 +3289,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             # (#1399) Every text state, not one key: the strategy text grew
             # past 255 once the yield reason was put in front of it.
             value = _fit_state(value)
+            value = self._not_back(value)
             if ((isinstance(value, (int, float)) and not isinstance(value, bool))
                     or (isinstance(value, str) and _HELD_TEXT_KEY.fullmatch(
                         self.entity_description.key))):
@@ -4343,6 +4349,71 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if take:
             self._reset_told = start
         return self._reset_told
+
+    def _period_of(self, start: Optional[datetime]) -> Any:
+        """(#1437) Which period a counter is in: the start for a counter
+        with its own start, the day / month / year for the calendar ones,
+        and None for a lifetime counter. Read without touching the
+        ``last_reset`` bookkeeping (#1436)."""
+        key = self.entity_description.key
+        if period_start_key(key) is not None or key in CAR_DAY_SENSOR_KEYS:
+            return None if start is None else round(start.timestamp())
+        if start is None:
+            return None
+        if key.startswith(("daily_", "flow_", "heat_pump_energy_today",
+                           "heat_pump_energy_shifted_today")):
+            return start.date()
+        if key.startswith("monthly_"):
+            return (start.year, start.month)
+        if key.startswith("yearly_"):
+            return start.year
+        return None
+
+    def _current_start(self) -> Optional[datetime]:
+        """(#1437) The start of the counter's period now, from the same
+        sources as ``last_reset``, with no side effects."""
+        from homeassistant.util import dt as dt_util
+        key = self.entity_description.key
+        start_key = period_start_key(key)
+        if start_key is not None:
+            raw = (self.coordinator.data or {}).get(start_key)
+            return dt_util.parse_datetime(raw) if isinstance(raw, str) else None
+        if key in CAR_DAY_SENSOR_KEYS:
+            calc = getattr(self.coordinator, "_energy_calculator", None)
+            return calc.ev_last_reset() if calc is not None else None
+        if key.startswith(("monthly_", "yearly_", "daily_", "flow_",
+                           "heat_pump_energy_today",
+                           "heat_pump_energy_shifted_today")):
+            return dt_util.now()
+        return None
+
+    def _not_back(self, value: Any) -> Any:
+        """(#1437) A counter never steps back inside its period — held
+        by at most ``NEVER_BACK_MAX`` (``utils/never_back.py``)."""
+        if (self.entity_description.key not in NEVER_BACK_KEYS
+                or not isinstance(value, (int, float))
+                or isinstance(value, bool)):
+            return value
+        period = self._period_of(self._current_start())
+        floor = self._nb_floor if period == self._nb_period else None
+        out = never_back(float(value), floor)
+        if isinstance(value, float) or out != value:
+            out = round(out, 3)
+        self._nb_floor, self._nb_period = out, period
+        return out
+
+    def _restore_not_back(self, restored: float) -> None:
+        """(#1437) The restored value is the floor for the period it was
+        published in (the restored ``last_reset``); without a known period
+        a calendar counter starts with no floor."""
+        if self.entity_description.key not in NEVER_BACK_KEYS:
+            return
+        told = self._reset_told
+        period = self._period_of(told)
+        if period is None and told is None and (
+                self._current_start() is not None):
+            return
+        self._nb_floor, self._nb_period = restored, period
 
     async def _restore_reset(self) -> None:
         """(#1436) Read the ``last_reset`` Home Assistant has for this sensor,
