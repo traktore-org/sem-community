@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [2.3.0-beta.30] — 27.11.2026
+
 - 🐛 **A battery night charge runs even when the night is too short** (#1362). The planned cheap hours now charge; before, nothing did.
 - 🐛 **The charge source goes back to your own value** (#1362). With two batteries and a slow select, it stayed on "solar only".
 - 🐛 **Sun + tariff tops up thin sun from the grid only with the battery switch off** (#1440). With it on, the battery pays.
