@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 🐛 **The car says why it waits while the plan shows sun plus grid** (#1440). A price missing for a moment no longer stops it.
+
 # [2.3.0-beta.30] — 27.11.2026
 
 - 🐛 **A battery night charge runs even when the night is too short** (#1362). The planned cheap hours now charge; before, nothing did.
