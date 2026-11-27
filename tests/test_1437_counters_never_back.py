@@ -354,3 +354,42 @@ def test_a_small_charger_day_dip_is_held_not_read_as_a_reset(mock_coordinator):
     s = _built(mock_coordinator, key, SensorStateClass.TOTAL_INCREASING)
     assert _publish(s, key, 0.09, _at(10, 0)) == 0.09
     assert _publish(s, key, 0.08, _at(10, 1)) == 0.09
+
+
+def test_a_flow_row_reads_the_flow_day_and_the_rest_the_booking_day(
+        mock_coordinator):
+    """Each row takes the day of the calculator that rolls it."""
+    mock_coordinator._energy_calculator = SimpleNamespace(
+        booking_day=date(2026, 11, 26), ev_last_reset=lambda: None)
+    mock_coordinator._flow_calculator = SimpleNamespace(
+        flow_day=date(2026, 11, 27))
+    when = datetime(2026, 11, 27, 0, 0, 0, 400000, tzinfo=ZONE)
+    with patch.object(dt_util, "now", return_value=when):
+        assert _sensor(mock_coordinator, "flow_solar_to_home_energy"
+                       ).last_reset == _at(0, 0, day=27)
+        assert _built(mock_coordinator, "pv_string_pv1_daily_energy"
+                      ).last_reset == _at(0, 0, day=27)
+        assert _sensor(mock_coordinator, "daily_home_energy"
+                       ).last_reset == _at(0, 0, day=26)
+
+
+def test_the_costs_are_read_on_the_day_the_energy_was_booked():
+    """calculate_energy books at 23:59:59.99, calculate_costs runs at
+    00:00:00.01: the costs are still yesterday's, as their last_reset."""
+    from unittest.mock import Mock
+    from custom_components.solar_energy_management.coordinator import (
+        energy_calculator as ec,
+    )
+    from custom_components.solar_energy_management.utils.time_manager import (
+        TimeManager,
+    )
+    hass = Mock()
+    hass.states.get = lambda _eid: None
+    calc = ec.EnergyCalculator({"update_interval": 3600}, TimeManager(hass))
+    calc.booking_day = date(2026, 11, 26)
+    calc._daily_cost_accumulators["cost_import_2026-11-26"] = 0.25
+    totals = calc._build_current_totals(
+        date(2026, 11, 26), "2026_11", "2026")
+    after = datetime(2026, 11, 27, 0, 0, 0, 10000, tzinfo=ZONE)
+    with patch.object(ec.dt_util, "now", return_value=after):
+        assert calc.calculate_costs(totals).daily_costs == 0.25

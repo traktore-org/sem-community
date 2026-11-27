@@ -4469,8 +4469,10 @@ class EnergyCalculator:
         """
         costs = CostData()
 
-        now = dt_util.now()
-        today = now.date()
+        # (#1437) the day ``calculate_energy`` booked this cycle under, not a
+        # second clock read: across midnight that read already said today,
+        # so the costs read today's empty rows under yesterday's last_reset
+        today = self.booking_day or dt_util.now().date()
         month_key = f"{today.year}_{today.month}"
         year_key = str(today.year)
 

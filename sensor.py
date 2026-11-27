@@ -4428,7 +4428,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         period = self._period_of(self._current_start())
         floor = self._nb_floor if period == self._nb_period else None
         # A TOTAL_INCREASING counter: a fall Home Assistant reads as a reset
-        # (below 90 %) and too large to be a wobble starts a new cycle.
+        # (below 90 %) and too large to be a wobble starts a new cycle. A
+        # real reset of 0.1 or less (one charger's car day that took only
+        # 0.1 kWh) is held until midnight ends the calendar period.
         if (floor is not None and self.entity_description.state_class
                 == SensorStateClass.TOTAL_INCREASING
                 and value < RESET_SHARE * floor
