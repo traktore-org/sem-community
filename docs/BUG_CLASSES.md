@@ -7443,3 +7443,12 @@ Refs #1432 #1176 #1436.
 **Guard:** `tests/test_1362_hold_takes_no_grid.py` — the reported case never shows "Utility" with a mains source (the inverter's own rule is in the fake), the put-back order, a source without the grid untouched, a change by hand left alone, no hold without a safe option or with an unreadable source, a charge after a hold, a restart mid-hold, observer mode.
 **Sweep question:** which other pair of entities does SEM write one of, while the other decides what the first one does?
 Refs #1362.
+
+### 205. A counter derived from two rows steps back when the subtracted row moves first — GUARDED
+
+**What happens.** #1382 held the meter-backed day rows so they never step back. Two published counters are differences of rows: the day's base load (house minus the controlled loads) and the CO₂ saved (solar minus export). A step in the subtracted row pulls them back. PROD 26.11: base load 9.29 → 9.28 kWh eight times, CO₂ 0.02 → 0.01 kg twice (#1437).
+**The rule.** No counter that adds up over a period steps back inside it. The value is held by at most `NEVER_BACK_MAX` (0.1, the sensor's unit) above a lower new value; a larger drop is a real reset or correction and goes through; a new period ends the hold; a restored value is a floor only for the period it was published in.
+**Where it lives:** `utils/never_back.py` (`NEVER_BACK_KEYS`, `MAY_FALL`, `never_back`) and `sensor.py` `SEMSolarSensor._not_back` / `_restore_not_back`, called where every value is published.
+**Guard:** `tests/test_1437_counters_never_back.py` — every TOTAL / TOTAL_INCREASING `SensorEntityDescription` (AST) is in `NEVER_BACK_KEYS` or in `MAY_FALL` with its reason; the PROD samples are replayed through the entity.
+**Sweep question:** which other number a person reads as "so far today" can move down without a reset?
+Refs #1437 #1382.
