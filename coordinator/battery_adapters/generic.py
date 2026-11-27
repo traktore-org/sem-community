@@ -137,6 +137,9 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             self._charge_adapter = None
         # (#1362) a battery held through a select (no discharge-limit number)
         self._hold = SelectHold(hass, config)
+        # (#1362) the hold reads and leaves the charge source through the
+        # charge's own memory of SEM's put-backs
+        self._hold.source_view = self._charge_adapter
         # #531: adopt a stranded API strategy left by a prior instance.
         self._detect_stranded_strategy()
 

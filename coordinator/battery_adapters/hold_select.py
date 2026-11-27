@@ -51,7 +51,7 @@ MIN_HOLD_S = 30 * 60.0
 #: select writes SEM may make to the hold select in one local day (the
 #: count is on disk and starts again at the day roll). A start over it
 #: stays in the current option; a put-back is never held back by it: it
-#: gives the battery back to the house (#1362).
+#: gives the battery back to the house (#1362). Nor is a grid charge.
 MAX_WRITES_PER_DAY = 12
 # (#1377) ``SHOW_WITHIN_S`` (60 s, shared with the charge select, imported
 # above): the select must show the hold option that long after a write (a
@@ -120,6 +120,9 @@ class SelectHold:
         #: (#1362) the hold was asked for a grid charge: its put-back never
         #: waits for the minimum hold (that rule stops flip-flop, not a charge)
         self._for_charge = False
+        #: (#1362) the grid charge's adapter, set by the battery adapter: one
+        #: memory of what the user set on the charge source, for both
+        self.source_view: Any = None
 
     def _battery(self) -> str:
         return str(self.config.get("battery_id", "") or "")
@@ -263,7 +266,11 @@ class SelectHold:
                     "a second write — the hold is refused")
         elif self._recent() and not self._for_charge:
             return SETTLING
-        capped = await self._capped(entity)
+        # (#1362) a grid charge the plan booked is not held back by the
+        # day's count: a night of holds used it up by 22:00 and the cheap
+        # hours went by with no charge. Its writes still count, and its own
+        # limits stay: two writes per attempt, then a refusal for 24 h.
+        capped = None if self._for_charge else await self._capped(entity)
         return capped or await self._write(entity, wanted, state)
 
     async def _join(self, entity: str, pack_w: Optional[float]) -> Optional[str]:
@@ -394,6 +401,10 @@ class SelectHold:
             shown = await self._guard_option(src)
             if shown is not None and state == shown:
                 return None                     # SEM's guard still shows
+        # (#1362) the user's value, not a read of SEM's own: right after
+        # the charge put the source back, a slow read still shows the charge
+        # option, and saved as the prior it would come back after the hold
+        state = await self._source_as_user_sees(src, state)
         verdict, target = hold_charge_source(
             options, state, listed_option(self.hass, src, charge))
         if verdict == "keep":
@@ -421,6 +432,18 @@ class SelectHold:
                      src, target, state)
         return None
 
+    async def _source_as_user_sees(self, src: str, state: str) -> str:
+        """(#1362) The charge source as the user set it: the charge
+        adapter's memory of its own put-back. Never raises."""
+        if self.source_view is None:
+            return state
+        try:
+            seen = await self.source_view.user_value(src, state)
+        except Exception:  # noqa: BLE001 — a hint, never a reason to fail
+            _LOGGER.debug("charge source memory not read", exc_info=True)
+            return state
+        return seen if seen is not None else state
+
     async def _guard_option(self, src: str) -> Optional[str]:
         for entity, _prior, option in await self.record.select_records(
                 self._battery()):
@@ -444,6 +467,10 @@ class SelectHold:
                 return                          # put back when it answers
             if option is not None and state == option and prior in options:
                 await self._select(src, prior)
+                # (#1362) the charge's next start reads the user's value
+                # while a slow read still shows the hold's
+                if self.source_view is not None:
+                    await self.source_view.note_put_back(src, option, prior)
             await self.record.stopped(src)
         except Exception:  # noqa: BLE001 — a put-back never costs a cycle
             _LOGGER.debug("charge source not put back after the hold",

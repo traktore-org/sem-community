@@ -197,6 +197,12 @@ class ForcedChargeRecord:
             await self._load()
             return self._prior.get(str(entity_id or ""))
 
+    async def option_of(self, entity_id: str) -> "str | None":
+        """(#1362) The option SEM's start wrote to this select, or None."""
+        async with self._lock:
+            await self._load()
+            return self._option.get(str(entity_id or ""))
+
     async def select_records(self, battery_id: str) -> list:
         """(#1346) ``(entity, prior, option)`` for each select this battery
         helped turn to a charge option and has not seen put back."""

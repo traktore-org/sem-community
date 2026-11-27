@@ -748,6 +748,8 @@ class GenericChargeAdapter(BatteryChargeAdapter):
     #: write at once, and its next poll can still show SEM's charge value
     #: (round 2, 25.11.2026)
     PUT_BACK_SETTLE_S = AWAY_FOR_S
+    #: (#1362) a second pack joins a write this young that it cannot see yet
+    JOIN_WITHIN_S = SHOW_WITHIN_S
 
     async def _as_user_sees(self, entity: str, state: "str | None") -> "str | None":
         """(#1426) The value the user has, as far as SEM can tell. After SEM
@@ -781,6 +783,15 @@ class GenericChargeAdapter(BatteryChargeAdapter):
             return back
         await self.charge_record.forget_put_back(entity)
         return state
+
+    async def user_value(self, entity: str, state: "str | None") -> "str | None":
+        """(#1362) The hold's way in: the value the user has on a select
+        SEM shares with the hold (see ``_as_user_sees``)."""
+        return await self._as_user_sees(entity, state)
+
+    async def note_put_back(self, entity: str, sem_value: str, back: str) -> None:
+        """(#1362) The hold put ``back`` over its own ``sem_value``."""
+        await self._note_put_back(entity, sem_value, back)
 
     async def _note_put_back(self, entity: str, sem_value: str, back: str) -> None:
         try:
@@ -882,6 +893,13 @@ class GenericChargeAdapter(BatteryChargeAdapter):
         wanted = listed_option(self.hass, entity, option)   # (#1039)
         if wanted not in options:
             return self._select_failed(f"{entity} does not list '{option}'")
+        if (state != wanted and not self._sel_writes
+                and await self._another_pack_just_wrote(entity, wanted)):
+            # (#1362) two packs, one select: the other pack wrote the
+            # option this cycle and the select does not show it yet. This
+            # pack joins that charge; a start of its own would drop the
+            # record and save the old read as the value to put back.
+            return await self._join_select_charge(entity, command)
         if state == wanted:
             # (#1377) a cloud select shows a write at once, before any poll
             # says the device took it: it counts as seen only once it still
@@ -926,6 +944,21 @@ class GenericChargeAdapter(BatteryChargeAdapter):
                 entity, f"{entity} did not take '{wanted}' — could not start "
                 "the charge, no more writes for it")
         return await self._write_charge_option(entity, wanted, state, command)
+
+    async def _another_pack_just_wrote(self, entity: str, wanted: str) -> bool:
+        """(#1362) Another pack's charge on ``entity`` set ``wanted`` less
+        than ``SHOW_WITHIN_S`` ago: a read may not show it yet."""
+        try:
+            if not await self.charge_record.others(entity, self._battery()):
+                return False
+            if await self.charge_record.prior_of(entity) is None:
+                return False
+            if await self.charge_record.option_of(entity) != wanted:
+                return False
+            age = await self.charge_record.age_h(entity)
+            return age is not None and age * 3600.0 < self.JOIN_WITHIN_S
+        except Exception:  # noqa: BLE001 — no join is the old way
+            return False
 
     def _since_write(self) -> float:
         at = self._sel_wrote_at
