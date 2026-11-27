@@ -118,7 +118,7 @@ NORMAL = (BatteryIntent.NORMAL, {})
 async def _run(hass, packs, steps, cycles=4):
     for intent, kw in steps:
         for _ in range(cycles):
-            for a, bid in zip(packs, ("b1", "b2")):
+            for a, bid in zip(packs, ("b1", "b2"), strict=False):
                 await actuate_battery(
                     BatteryDecision(battery_id=bid, intent=intent, **kw), a)
             tick = getattr(hass, "tick", None)
