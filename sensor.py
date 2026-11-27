@@ -14,7 +14,7 @@ from .consts.core import (
     SENSOR_DARK_READ_GRACE_S,
 )
 from .utils.attr_budget import fit_state_attributes
-from .utils.never_back import NEVER_BACK_KEYS, never_back
+from .utils.never_back import RESET_SHARE, is_never_back, never_back
 from typing import Any, Dict, List, Optional
 
 from homeassistant.components.sensor import (
@@ -132,6 +132,35 @@ RESET_UNTOLD_TOTAL_KEYS = frozenset({
     "forecast_today_kwh", "forecast_tomorrow_kwh",
     "forecast_remaining_today_kwh",
 })
+
+#: Which calendar period a counter runs over, by a part of its key: the day
+#: (from midnight), the month or the year. ``last_reset`` publishes the
+#: period's start; (#1437) the guard against a step back uses the same rule,
+#: so the hold always ends where Home Assistant starts a new period.
+_DAY_KEY_PARTS = ("daily_", "flow_", "sem_daily_", "home_consumption_energy_daily")
+_MONTH_KEY_PARTS = ("monthly_", "home_consumption_energy_monthly", "power_charge_cost")
+_YEAR_KEY_PARTS = ("yearly_",)
+
+
+def calendar_kind(sensor_key: str) -> Optional[str]:
+    """``"day"``, ``"month"`` or ``"year"`` for a counter that starts again
+    each calendar period, else None."""
+    for kind, parts in (("day", _DAY_KEY_PARTS), ("month", _MONTH_KEY_PARTS),
+                        ("year", _YEAR_KEY_PARTS)):
+        if any(part in sensor_key for part in parts):
+            return kind
+    return None
+
+
+def calendar_start(kind: Optional[str], now: datetime) -> Optional[datetime]:
+    """The start of the calendar period ``kind`` that ``now`` is in."""
+    if kind == "day":
+        return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if kind == "month":
+        return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if kind == "year":
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return None
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
@@ -4247,26 +4276,6 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         now = dt_util.now()
         sensor_key = self.entity_description.key
 
-        # Daily reset patterns (reset at midnight 00:00:00)
-        daily_reset_patterns = [
-            "daily_",  # All daily_* sensors
-            "flow_",   # All flow energy sensors (reset daily)
-            "sem_daily_",  # SEM daily sensors
-            "home_consumption_energy_daily",  # Daily home consumption
-        ]
-
-        # Monthly reset patterns (reset at first day of month 00:00:00)
-        monthly_reset_patterns = [
-            "monthly_",  # All monthly_* sensors
-            "home_consumption_energy_monthly",  # Monthly home consumption
-            "power_charge_cost",  # Monthly power charge cost
-        ]
-
-        # Yearly reset patterns (reset on Jan 1 00:00:00)
-        yearly_reset_patterns = [
-            "yearly_",  # All yearly_* sensors
-        ]
-
         # (#1432) A device row rolls at sunrise; (#1436) a session row falls
         # to 0 when the next session starts. The start is published with the
         # value, read from the same record, so the two move together.
@@ -4286,23 +4295,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             if start is not None:
                 return self._start_told(start)
 
-        # Check if sensor resets daily
-        if any(pattern in sensor_key for pattern in daily_reset_patterns):
-            # Return midnight of current day (00:00:00)
-            return now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # Check if sensor resets monthly
-        if any(pattern in sensor_key for pattern in monthly_reset_patterns):
-            # Return first day of current month at midnight
-            return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        # Check if sensor resets yearly
-        if any(pattern in sensor_key for pattern in yearly_reset_patterns):
-            # Return Jan 1 of current year at midnight
-            return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        # Lifetime totals (never reset) return None
-        return None
+        # A day (from midnight), month or year counter; a lifetime total
+        # (never reset) has None.
+        return calendar_start(calendar_kind(sensor_key), now)
 
     def _start_told(self, start: Optional[datetime]) -> Optional[datetime]:
         """(#1436) The period start to publish as ``last_reset``.
@@ -4356,16 +4351,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         and None for a lifetime counter. Read without touching the
         ``last_reset`` bookkeeping (#1436)."""
         key = self.entity_description.key
-        if period_start_key(key) is not None or key in CAR_DAY_SENSOR_KEYS:
-            return None if start is None else round(start.timestamp())
         if start is None:
             return None
-        if key.startswith(("daily_", "flow_", "heat_pump_energy_today",
-                           "heat_pump_energy_shifted_today")):
+        if period_start_key(key) is not None or (
+                key in CAR_DAY_SENSOR_KEYS and self._car_day_start() is not None):
+            return round(start.timestamp())
+        kind = calendar_kind(key)
+        if kind == "day":
             return start.date()
-        if key.startswith("monthly_"):
+        if kind == "month":
             return (start.year, start.month)
-        if key.startswith("yearly_"):
+        if kind == "year":
             return start.year
         return None
 
@@ -4378,24 +4374,33 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if start_key is not None:
             raw = (self.coordinator.data or {}).get(start_key)
             return dt_util.parse_datetime(raw) if isinstance(raw, str) else None
-        if key in CAR_DAY_SENSOR_KEYS:
-            calc = getattr(self.coordinator, "_energy_calculator", None)
-            return calc.ev_last_reset() if calc is not None else None
-        if key.startswith(("monthly_", "yearly_", "daily_", "flow_",
-                           "heat_pump_energy_today",
-                           "heat_pump_energy_shifted_today")):
-            return dt_util.now()
-        return None
+        if key in CAR_DAY_SENSOR_KEYS and self._car_day_start() is not None:
+            return self._car_day_start()
+        # as ``last_reset``: the car day keeps midnight until its first roll
+        return calendar_start(calendar_kind(key), dt_util.now())
+
+    def _car_day_start(self) -> Optional[datetime]:
+        """(#1176) When the car day last began, or None before the first
+        roll this run saw."""
+        calc = getattr(self.coordinator, "_energy_calculator", None)
+        start = calc.ev_last_reset() if calc is not None else None
+        return start if isinstance(start, datetime) else None
 
     def _not_back(self, value: Any) -> Any:
         """(#1437) A counter never steps back inside its period — held
-        by at most ``NEVER_BACK_MAX`` (``utils/never_back.py``)."""
-        if (self.entity_description.key not in NEVER_BACK_KEYS
+        by at most ``NEVER_BACK_MAX`` (``utils/never_back.py``). A
+        TOTAL_INCREASING counter has no ``last_reset``: a fall Home
+        Assistant reads as a reset starts a new cycle."""
+        if (not is_never_back(self.entity_description.key)
                 or not isinstance(value, (int, float))
                 or isinstance(value, bool)):
             return value
         period = self._period_of(self._current_start())
         floor = self._nb_floor if period == self._nb_period else None
+        if (floor is not None and self.entity_description.state_class
+                == SensorStateClass.TOTAL_INCREASING
+                and value < RESET_SHARE * floor):
+            floor = None
         out = never_back(float(value), floor)
         if isinstance(value, float) or out != value:
             out = round(out, 3)
@@ -4406,7 +4411,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         """(#1437) The restored value is the floor for the period it was
         published in (the restored ``last_reset``); without a known period
         a calendar counter starts with no floor."""
-        if self.entity_description.key not in NEVER_BACK_KEYS:
+        if not is_never_back(self.entity_description.key):
             return
         told = self._reset_told
         period = self._period_of(told)

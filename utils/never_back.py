@@ -11,19 +11,29 @@ Every sensor with a TOTAL or TOTAL_INCREASING state class is named here,
 either as a counter that never steps back or with the reason it may fall —
 a test fails for a new counter that is in neither list.
 
+Counters built per charger, per PV string or per device have a key with
+an id in it; they are named by their family, the key with ``{}`` for the id.
+
 The hold is bounded like #1382's: a published value is held by at most
-``NEVER_BACK_MAX`` (in the sensor's own unit) above the new value. A larger
-drop is a real reset or correction and goes through; the period changing
-(a new ``last_reset``) ends the hold.
+``NEVER_BACK_MAX`` (in the sensor's own unit) above the new value, so a
+larger drop shows, 0.1 above the new value. The period changing (a new
+``last_reset``) ends the hold. A TOTAL_INCREASING counter has no
+``last_reset``: a fall below ``RESET_SHARE`` of the last value is a new
+cycle, as Home Assistant reads it, and shows as it is.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 #: The most a published counter is held above a lower new value, in the
 #: sensor's unit (kWh, kg, trees, sessions). The same 0.1 as #1382's
 #: ``HOLD_MAX_KWH``; the PROD step-backs were 0.01.
 NEVER_BACK_MAX = 0.1
+
+#: A TOTAL_INCREASING counter that falls below this share of its last value
+#: starts a new cycle: Home Assistant's own reset rule for that state class.
+RESET_SHARE = 0.9
 
 #: Counters that never step back inside their period.
 NEVER_BACK_KEYS: frozenset[str] = frozenset({
@@ -84,6 +94,40 @@ MAY_FALL: dict[str, str] = {
         "power_charge_cost", "roi_annual_savings", "session_cost",
     )},
 }
+
+
+#: Counter families that never step back inside their period.
+NEVER_BACK_FAMILIES: frozenset[str] = frozenset({
+    "charger_{}_session_energy", "charger_{}_daily_energy",
+    "charger_{}_flow_solar_to_ev_energy", "charger_{}_flow_grid_to_ev_energy",
+    "charger_{}_flow_battery_to_ev_energy",
+    "pv_string_{}_daily_energy",
+})
+
+#: Counter families that may fall inside their period, with the reason.
+MAY_FALL_FAMILIES: dict[str, str] = {
+    "charger_{}_session_energy_external": (
+        "the charger's own counter, shown as the charger reads it; the "
+        "charger resets it when it likes"),
+    "daily_tariff_cost_{}": _MONEY,
+}
+
+_FAMILY_RES = tuple(
+    (family, re.compile("(.+)".join(re.escape(p) for p in family.split("{}"))))
+    for family in sorted(NEVER_BACK_FAMILIES | set(MAY_FALL_FAMILIES)))
+
+
+def family_of(key: str) -> Optional[str]:
+    """The family a per-charger / per-string / per-device key belongs to."""
+    for family, pattern in _FAMILY_RES:
+        if pattern.fullmatch(key):
+            return family
+    return None
+
+
+def is_never_back(key: str) -> bool:
+    """True for a counter that never steps back inside its period."""
+    return key in NEVER_BACK_KEYS or family_of(key) in NEVER_BACK_FAMILIES
 
 
 def never_back(value: float, floor: Optional[float]) -> float:
