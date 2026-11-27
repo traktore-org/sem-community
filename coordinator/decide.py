@@ -1355,6 +1355,52 @@ def _sun_tariff_day(view: "ChargerView", mode_name: str,
     return _thin_sun_top_up(view, base) or base
 
 
+#: (#1440) The thin-sun rule's "no" → the sentence the charger shows. Asked
+#: only while the plan has a sun + grid block now, or a session of the rule
+#: was running: then the user sees the block and needs the rule's own cause.
+#: Until #1440 every "no" left the sun-only reason ("not enough spare sun"),
+#: so a booked block with an idle car said nothing about the battery, the
+#: price or the peak limit that held it.
+THIN_SUN_HELD_CODES: Dict[str, str] = {
+    "battery_takes_sun": RC.CHARGER_THIN_SUN_BATTERY,
+    "battery_would_pay": RC.CHARGER_THIN_SUN_BATTERY_PAYS,
+    "battery_pays": RC.CHARGER_THIN_SUN_BATTERY_PAYS,
+    "not_cheaper": RC.CHARGER_THIN_SUN_LATER,
+    "never_pays": RC.CHARGER_THIN_SUN_LATER,
+    "forecast_covers": RC.CHARGER_THIN_SUN_SUN_LATER,
+    "no_grid_room": RC.CHARGER_THIN_SUN_PEAK,
+    "peak_limit": RC.CHARGER_THIN_SUN_PEAK,
+    "export_unknown": RC.CHARGER_THIN_SUN_UNKNOWN,
+    "forecast_unknown": RC.CHARGER_THIN_SUN_UNKNOWN,
+    "price_unknown": RC.CHARGER_THIN_SUN_UNKNOWN,
+    "price_unread": RC.CHARGER_THIN_SUN_UNKNOWN,
+}
+#: (#1440) The "no"s that keep the sun-only reason and code: the reason
+#: already is the cause (too little sun) — the reason text names the word.
+THIN_SUN_KEEPS_CODE = frozenset({"no_sun", "sun_gone"})
+#: (#1440) The "no"s where the rule was not the one deciding: no block,
+#: nothing to buy, no inputs, or enough sun for the sun alone.
+THIN_SUN_NOT_ASKED = frozenset({
+    "not_evaluated", "no_need", "no_plan_block", "strong_sun",
+})
+
+
+def _thin_sun_held(solar: "ChargerDecision", t, why: str,
+                   in_session: bool) -> "Optional[ChargerDecision]":
+    """(#1440) The sun-only IDLE, saying why the thin-sun rule held back —
+    or None, and the sun-only reason stands. The decision is unchanged:
+    only its reason."""
+    if why in THIN_SUN_NOT_ASKED:
+        return None
+    if not (getattr(t, "in_block", False) or in_session):
+        return None
+    reason = f"{solar.reason} — thin sun held: {why}"
+    code = THIN_SUN_HELD_CODES.get(why)
+    if code is None:
+        return replace(solar, reason=reason)
+    return replace(solar, reason=reason, reason_code=code, reason_params={})
+
+
 def _thin_sun_top_up(view: "ChargerView",
                      solar: "ChargerDecision") -> "Optional[ChargerDecision]":
     """(#1411) The thin-sun rule, live: charge at the minimum on the spare
@@ -1419,10 +1465,16 @@ def _thin_sun_top_up(view: "ChargerView",
         pack_could_pay=(not _assist_blocked_why(f) and sun_w >= _gate_w),
         running=drawing, hard=hard)
     if not fires:
-        return None
+        return _thin_sun_held(solar, t, why, in_session)
     grid = night_top_up_decision(view, solar.mode or "solar_plus_cheap", phase="day (thin sun)")
     if grid.intent is not ChargerIntent.CHARGE_AT_AMPS:
-        return None        # the plan holds, or the floor is met: its word
+        # the plan holds, or the floor is met: its word (#1440), on the
+        # sun-only answer's IDLE
+        if grid.intent is ChargerIntent.IDLE and grid.reason_code:
+            return replace(solar, reason=grid.reason,
+                           reason_code=grid.reason_code,
+                           reason_params=dict(grid.reason_params or {}))
+        return None
     if t.export_price is not None and t.import_now is not None \
             and t.cheapest_later is not None:
         blend = blended_price(sun_w, min_w, t.export_price, t.import_now)
@@ -1430,7 +1482,8 @@ def _thin_sun_top_up(view: "ChargerView",
                   f"for the cheapest later hour")
     else:
         priced = "prices not read this cycle"
-    held = " (minimum block: holding)" if why == "held" else ""
+    held = {"held": " (minimum block: holding)",
+            "bridged": " (price gap: bridged)"}.get(why, "")
     return replace(
         grid,
         # The rule priced the MINIMUM (every watt above it is pure grid at

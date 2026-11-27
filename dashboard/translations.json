@@ -2580,7 +2580,13 @@
     "next_bar_left": "{have} z alespoň {min} · zbývá {left}",
     "next_bar_car_full": "Auto plné · {have} z alespoň {min}",
     "next_bar_done": "{have} z alespoň {min} · dosaženo",
-    "next_batt_help_used_when": "Platí, když nabíječka povolí pomoc baterie."
+    "next_batt_help_used_when": "Platí, když nabíječka povolí pomoc baterie.",
+    "why_reason_charger_thin_sun_battery": "Domácí baterie se nabíjí ze slunce, proto auto teď nenabíjí ze slunce plus sítě.",
+    "why_reason_charger_thin_sun_battery_pays": "Domácí baterie může zaplatit část tohoto nabíjení, proto auto teď nenabíjí ze slunce plus sítě.",
+    "why_reason_charger_thin_sun_later": "Slunce plus síť teď nestojí méně než nabíjení později, proto auto čeká.",
+    "why_reason_charger_thin_sun_peak": "Dům je na svém limitu výkonu, proto auto teď nenabíjí ze slunce plus sítě.",
+    "why_reason_charger_thin_sun_unknown": "SEM nemůže přečíst cenu nebo předpověď, proto auto teď nenabíjí ze slunce plus sítě.",
+    "why_reason_charger_thin_sun_sun_later": "Později dnes bude víc slunce a nabije auto, proto čeká."
   },
   "da": {
     "/year": "/år",
@@ -5163,7 +5169,13 @@
     "next_bar_left": "{have} af mindst {min} · {left} tilbage",
     "next_bar_car_full": "Bilen er fuld · {have} af mindst {min}",
     "next_bar_done": "{have} af mindst {min} · nået",
-    "next_batt_help_used_when": "Gælder, når en lader tillader batterihjælp."
+    "next_batt_help_used_when": "Gælder, når en lader tillader batterihjælp.",
+    "why_reason_charger_thin_sun_battery": "Husets batteri lader fra solen, så bilen lader ikke på sol plus net nu.",
+    "why_reason_charger_thin_sun_battery_pays": "Husets batteri kan betale en del af denne opladning, så bilen lader ikke på sol plus net nu.",
+    "why_reason_charger_thin_sun_later": "Sol plus net koster ikke mindre nu end at lade senere, så bilen venter.",
+    "why_reason_charger_thin_sun_peak": "Huset er ved sin effektgrænse, så bilen lader ikke på sol plus net nu.",
+    "why_reason_charger_thin_sun_unknown": "SEM kan ikke læse en pris eller prognosen, så bilen lader ikke på sol plus net nu.",
+    "why_reason_charger_thin_sun_sun_later": "Senere i dag kommer der mere sol, som lader bilen, så den venter."
   },
   "de": {
     "/year": "/Jahr",
@@ -7746,7 +7758,13 @@
     "next_bar_left": "{have} von mindestens {min} · noch {left}",
     "next_bar_car_full": "Auto voll · {have} von mindestens {min}",
     "next_bar_done": "{have} von mindestens {min} · erreicht",
-    "next_batt_help_used_when": "Gilt, wenn eine Ladestation Batteriehilfe erlaubt."
+    "next_batt_help_used_when": "Gilt, wenn eine Ladestation Batteriehilfe erlaubt.",
+    "why_reason_charger_thin_sun_battery": "Die Hausbatterie lädt mit der Sonne, darum lädt das Auto jetzt nicht mit Sonne plus Netz.",
+    "why_reason_charger_thin_sun_battery_pays": "Die Hausbatterie kann einen Teil dieser Ladung zahlen, darum lädt das Auto jetzt nicht mit Sonne plus Netz.",
+    "why_reason_charger_thin_sun_later": "Sonne plus Netz kostet jetzt nicht weniger als später laden, darum wartet das Auto.",
+    "why_reason_charger_thin_sun_peak": "Das Haus ist an seinem Leistungslimit, darum lädt das Auto jetzt nicht mit Sonne plus Netz.",
+    "why_reason_charger_thin_sun_unknown": "SEM kann einen Preis oder die Prognose nicht lesen, darum lädt das Auto jetzt nicht mit Sonne plus Netz.",
+    "why_reason_charger_thin_sun_sun_later": "Später am Tag kommt mehr Sonne und lädt das Auto, darum wartet es."
   },
   "en": {
     "/year": "/year",
@@ -10329,7 +10347,13 @@
     "next_bar_left": "{have} of at least {min} · {left} to go",
     "next_bar_car_full": "Car full · {have} of at least {min}",
     "next_bar_done": "{have} of at least {min} · reached",
-    "next_batt_help_used_when": "Used when a charger allows battery help."
+    "next_batt_help_used_when": "Used when a charger allows battery help.",
+    "why_reason_charger_thin_sun_battery": "The house battery is charging from the sun, so the car does not use sun plus grid now.",
+    "why_reason_charger_thin_sun_battery_pays": "The house battery can pay part of this charge, so the car does not use sun plus grid now.",
+    "why_reason_charger_thin_sun_later": "Sun plus grid now does not cost less than charging later, so the car waits.",
+    "why_reason_charger_thin_sun_peak": "The house is at its power limit, so the car does not use sun plus grid now.",
+    "why_reason_charger_thin_sun_unknown": "SEM cannot read a price or the forecast, so the car does not use sun plus grid now.",
+    "why_reason_charger_thin_sun_sun_later": "More sun later today will charge the car, so it waits."
   },
   "es": {
     "/year": "/año",
@@ -12912,7 +12936,13 @@
     "next_bar_left": "{have} de al menos {min} · faltan {left}",
     "next_bar_car_full": "Coche lleno · {have} de al menos {min}",
     "next_bar_done": "{have} de al menos {min} · alcanzado",
-    "next_batt_help_used_when": "Se aplica cuando un cargador permite la ayuda de la batería."
+    "next_batt_help_used_when": "Se aplica cuando un cargador permite la ayuda de la batería.",
+    "why_reason_charger_thin_sun_battery": "La batería de casa se está cargando con el sol, así que el coche no carga ahora con sol más red.",
+    "why_reason_charger_thin_sun_battery_pays": "La batería de casa puede pagar parte de esta carga, así que el coche no carga ahora con sol más red.",
+    "why_reason_charger_thin_sun_later": "Sol más red no cuesta menos ahora que cargar después, así que el coche espera.",
+    "why_reason_charger_thin_sun_peak": "La casa está en su límite de potencia, así que el coche no carga ahora con sol más red.",
+    "why_reason_charger_thin_sun_unknown": "SEM no puede leer un precio o la previsión, así que el coche no carga ahora con sol más red.",
+    "why_reason_charger_thin_sun_sun_later": "Más tarde hoy habrá más sol para cargar el coche, así que espera."
   },
   "fi": {
     "/year": "/vuosi",
@@ -15495,7 +15525,13 @@
     "next_bar_left": "{have} / vähintään {min} · jäljellä {left}",
     "next_bar_car_full": "Auto täynnä · {have} / vähintään {min}",
     "next_bar_done": "{have} / vähintään {min} · saavutettu",
-    "next_batt_help_used_when": "Käytössä, kun laturi sallii akun avun."
+    "next_batt_help_used_when": "Käytössä, kun laturi sallii akun avun.",
+    "why_reason_charger_thin_sun_battery": "Kotiakku latautuu auringosta, joten auto ei nyt lataudu auringolla ja verkolla.",
+    "why_reason_charger_thin_sun_battery_pays": "Kotiakku voi maksaa osan tästä latauksesta, joten auto ei nyt lataudu auringolla ja verkolla.",
+    "why_reason_charger_thin_sun_later": "Aurinko ja verkko yhdessä eivät nyt maksa vähemmän kuin lataus myöhemmin, joten auto odottaa.",
+    "why_reason_charger_thin_sun_peak": "Talo on tehorajallaan, joten auto ei nyt lataudu auringolla ja verkolla.",
+    "why_reason_charger_thin_sun_unknown": "SEM ei voi lukea hintaa tai ennustetta, joten auto ei nyt lataudu auringolla ja verkolla.",
+    "why_reason_charger_thin_sun_sun_later": "Myöhemmin tänään aurinkoa on enemmän ja se lataa auton, joten auto odottaa."
   },
   "fr": {
     "/year": "/an",
@@ -18078,7 +18114,13 @@
     "next_bar_left": "{have} sur au moins {min} · encore {left}",
     "next_bar_car_full": "Voiture pleine · {have} sur au moins {min}",
     "next_bar_done": "{have} sur au moins {min} · atteint",
-    "next_batt_help_used_when": "S'applique quand une borne autorise l'aide de la batterie."
+    "next_batt_help_used_when": "S'applique quand une borne autorise l'aide de la batterie.",
+    "why_reason_charger_thin_sun_battery": "La batterie de la maison se charge avec le soleil, donc la voiture ne charge pas maintenant avec soleil plus réseau.",
+    "why_reason_charger_thin_sun_battery_pays": "La batterie de la maison peut payer une partie de cette charge, donc la voiture ne charge pas maintenant avec soleil plus réseau.",
+    "why_reason_charger_thin_sun_later": "Soleil plus réseau ne coûte pas moins maintenant que charger plus tard, donc la voiture attend.",
+    "why_reason_charger_thin_sun_peak": "La maison est à sa limite de puissance, donc la voiture ne charge pas maintenant avec soleil plus réseau.",
+    "why_reason_charger_thin_sun_unknown": "SEM ne peut pas lire un prix ou la prévision, donc la voiture ne charge pas maintenant avec soleil plus réseau.",
+    "why_reason_charger_thin_sun_sun_later": "Plus de soleil plus tard aujourd'hui chargera la voiture, donc elle attend."
   },
   "hu": {
     "/year": "/év",
@@ -20661,7 +20703,13 @@
     "next_bar_left": "{have} a legalább {min}-ból · még {left}",
     "next_bar_car_full": "Az autó tele · {have} / legalább {min}",
     "next_bar_done": "{have} a legalább {min}-ból · elérve",
-    "next_batt_help_used_when": "Akkor érvényes, ha egy töltő engedi az akku segítségét."
+    "next_batt_help_used_when": "Akkor érvényes, ha egy töltő engedi az akku segítségét.",
+    "why_reason_charger_thin_sun_battery": "A házi akkumulátor a napból töltődik, ezért az autó most nem tölt a napról és a hálózatról.",
+    "why_reason_charger_thin_sun_battery_pays": "A házi akkumulátor fizetheti ennek a töltésnek egy részét, ezért az autó most nem tölt a napról és a hálózatról.",
+    "why_reason_charger_thin_sun_later": "A nap és a hálózat együtt most nem kerül kevesebbe, mint a későbbi töltés, ezért az autó vár.",
+    "why_reason_charger_thin_sun_peak": "A ház elérte a teljesítményhatárát, ezért az autó most nem tölt a napról és a hálózatról.",
+    "why_reason_charger_thin_sun_unknown": "A SEM nem tud kiolvasni egy árat vagy az előrejelzést, ezért az autó most nem tölt a napról és a hálózatról.",
+    "why_reason_charger_thin_sun_sun_later": "Ma később több nap lesz, és az tölti az autót, ezért vár."
   },
   "it": {
     "/year": "/anno",
@@ -23244,7 +23292,13 @@
     "next_bar_left": "{have} di almeno {min} · mancano {left}",
     "next_bar_car_full": "Auto piena · {have} di almeno {min}",
     "next_bar_done": "{have} di almeno {min} · raggiunto",
-    "next_batt_help_used_when": "Vale quando un caricatore consente l'aiuto della batteria."
+    "next_batt_help_used_when": "Vale quando un caricatore consente l'aiuto della batteria.",
+    "why_reason_charger_thin_sun_battery": "La batteria di casa si sta caricando con il sole, quindi l'auto ora non carica con sole più rete.",
+    "why_reason_charger_thin_sun_battery_pays": "La batteria di casa può pagare parte di questa carica, quindi l'auto ora non carica con sole più rete.",
+    "why_reason_charger_thin_sun_later": "Sole più rete adesso non costa meno che caricare più tardi, quindi l'auto aspetta.",
+    "why_reason_charger_thin_sun_peak": "La casa è al suo limite di potenza, quindi l'auto ora non carica con sole più rete.",
+    "why_reason_charger_thin_sun_unknown": "SEM non riesce a leggere un prezzo o la previsione, quindi l'auto ora non carica con sole più rete.",
+    "why_reason_charger_thin_sun_sun_later": "Più tardi oggi ci sarà più sole per caricare l'auto, quindi aspetta."
   },
   "nl": {
     "/year": "/jaar",
@@ -25827,7 +25881,13 @@
     "next_bar_left": "{have} van minstens {min} · nog {left}",
     "next_bar_car_full": "Auto vol · {have} van minstens {min}",
     "next_bar_done": "{have} van minstens {min} · bereikt",
-    "next_batt_help_used_when": "Geldt als een laadpunt accuhulp toestaat."
+    "next_batt_help_used_when": "Geldt als een laadpunt accuhulp toestaat.",
+    "why_reason_charger_thin_sun_battery": "De thuisbatterij laadt met de zon, dus de auto laadt nu niet met zon plus net.",
+    "why_reason_charger_thin_sun_battery_pays": "De thuisbatterij kan een deel van deze lading betalen, dus de auto laadt nu niet met zon plus net.",
+    "why_reason_charger_thin_sun_later": "Zon plus net kost nu niet minder dan later laden, dus de auto wacht.",
+    "why_reason_charger_thin_sun_peak": "Het huis zit op zijn vermogensgrens, dus de auto laadt nu niet met zon plus net.",
+    "why_reason_charger_thin_sun_unknown": "SEM kan een prijs of de voorspelling niet lezen, dus de auto laadt nu niet met zon plus net.",
+    "why_reason_charger_thin_sun_sun_later": "Later vandaag komt meer zon die de auto laadt, dus hij wacht."
   },
   "no": {
     "/year": "/år",
@@ -28410,7 +28470,13 @@
     "next_bar_left": "{have} av minst {min} · {left} igjen",
     "next_bar_car_full": "Bilen er full · {have} av minst {min}",
     "next_bar_done": "{have} av minst {min} · nådd",
-    "next_batt_help_used_when": "Gjelder når en lader tillater batterihjelp."
+    "next_batt_help_used_when": "Gjelder når en lader tillater batterihjelp.",
+    "why_reason_charger_thin_sun_battery": "Husbatteriet lader fra solen, så bilen lader ikke på sol pluss nett nå.",
+    "why_reason_charger_thin_sun_battery_pays": "Husbatteriet kan betale en del av denne ladingen, så bilen lader ikke på sol pluss nett nå.",
+    "why_reason_charger_thin_sun_later": "Sol pluss nett koster ikke mindre nå enn å lade senere, så bilen venter.",
+    "why_reason_charger_thin_sun_peak": "Huset er ved effektgrensen sin, så bilen lader ikke på sol pluss nett nå.",
+    "why_reason_charger_thin_sun_unknown": "SEM kan ikke lese en pris eller prognosen, så bilen lader ikke på sol pluss nett nå.",
+    "why_reason_charger_thin_sun_sun_later": "Senere i dag kommer mer sol som lader bilen, så den venter."
   },
   "pl": {
     "/year": "/rok",
@@ -30993,7 +31059,13 @@
     "next_bar_left": "{have} z co najmniej {min} · zostało {left}",
     "next_bar_car_full": "Auto pełne · {have} z co najmniej {min}",
     "next_bar_done": "{have} z co najmniej {min} · osiągnięto",
-    "next_batt_help_used_when": "Obowiązuje, gdy ładowarka pozwala na pomoc baterii."
+    "next_batt_help_used_when": "Obowiązuje, gdy ładowarka pozwala na pomoc baterii.",
+    "why_reason_charger_thin_sun_battery": "Bateria domowa ładuje się ze słońca, więc samochód nie ładuje się teraz ze słońca plus sieci.",
+    "why_reason_charger_thin_sun_battery_pays": "Bateria domowa może zapłacić część tego ładowania, więc samochód nie ładuje się teraz ze słońca plus sieci.",
+    "why_reason_charger_thin_sun_later": "Słońce plus sieć nie kosztuje teraz mniej niż ładowanie później, więc samochód czeka.",
+    "why_reason_charger_thin_sun_peak": "Dom jest na swoim limicie mocy, więc samochód nie ładuje się teraz ze słońca plus sieci.",
+    "why_reason_charger_thin_sun_unknown": "SEM nie może odczytać ceny lub prognozy, więc samochód nie ładuje się teraz ze słońca plus sieci.",
+    "why_reason_charger_thin_sun_sun_later": "Później dziś będzie więcej słońca, które naładuje samochód, więc czeka."
   },
   "pt": {
     "/year": "/ano",
@@ -33576,7 +33648,13 @@
     "next_bar_left": "{have} de pelo menos {min} · faltam {left}",
     "next_bar_car_full": "Carro cheio · {have} de pelo menos {min}",
     "next_bar_done": "{have} de pelo menos {min} · atingido",
-    "next_batt_help_used_when": "Aplica-se quando um carregador permite a ajuda da bateria."
+    "next_batt_help_used_when": "Aplica-se quando um carregador permite a ajuda da bateria.",
+    "why_reason_charger_thin_sun_battery": "A bateria da casa está a carregar com o sol, por isso o carro não carrega agora com sol mais rede.",
+    "why_reason_charger_thin_sun_battery_pays": "A bateria da casa pode pagar parte desta carga, por isso o carro não carrega agora com sol mais rede.",
+    "why_reason_charger_thin_sun_later": "Sol mais rede não custa menos agora do que carregar depois, por isso o carro espera.",
+    "why_reason_charger_thin_sun_peak": "A casa está no seu limite de potência, por isso o carro não carrega agora com sol mais rede.",
+    "why_reason_charger_thin_sun_unknown": "O SEM não consegue ler um preço ou a previsão, por isso o carro não carrega agora com sol mais rede.",
+    "why_reason_charger_thin_sun_sun_later": "Mais tarde hoje haverá mais sol para carregar o carro, por isso espera."
   },
   "ro": {
     "/year": "/an",
@@ -36159,7 +36237,13 @@
     "next_bar_left": "{have} din cel puțin {min} · mai sunt {left}",
     "next_bar_car_full": "Mașina e plină · {have} din cel puțin {min}",
     "next_bar_done": "{have} din cel puțin {min} · atins",
-    "next_batt_help_used_when": "Se aplică atunci când un încărcător permite ajutorul bateriei."
+    "next_batt_help_used_when": "Se aplică atunci când un încărcător permite ajutorul bateriei.",
+    "why_reason_charger_thin_sun_battery": "Bateria casei se încarcă de la soare, deci mașina nu se încarcă acum cu soare plus rețea.",
+    "why_reason_charger_thin_sun_battery_pays": "Bateria casei poate plăti o parte din această încărcare, deci mașina nu se încarcă acum cu soare plus rețea.",
+    "why_reason_charger_thin_sun_later": "Soare plus rețea nu costă acum mai puțin decât încărcarea mai târziu, deci mașina așteaptă.",
+    "why_reason_charger_thin_sun_peak": "Casa este la limita de putere, deci mașina nu se încarcă acum cu soare plus rețea.",
+    "why_reason_charger_thin_sun_unknown": "SEM nu poate citi un preț sau prognoza, deci mașina nu se încarcă acum cu soare plus rețea.",
+    "why_reason_charger_thin_sun_sun_later": "Mai târziu azi va fi mai mult soare care încarcă mașina, deci așteaptă."
   },
   "sv": {
     "/year": "/år",
@@ -38742,7 +38826,13 @@
     "next_bar_left": "{have} av minst {min} · {left} kvar",
     "next_bar_car_full": "Bilen är full · {have} av minst {min}",
     "next_bar_done": "{have} av minst {min} · uppnått",
-    "next_batt_help_used_when": "Gäller när en laddare tillåter batterihjälp."
+    "next_batt_help_used_when": "Gäller när en laddare tillåter batterihjälp.",
+    "why_reason_charger_thin_sun_battery": "Husbatteriet laddas av solen, så bilen laddar inte på sol plus nät nu.",
+    "why_reason_charger_thin_sun_battery_pays": "Husbatteriet kan betala en del av den här laddningen, så bilen laddar inte på sol plus nät nu.",
+    "why_reason_charger_thin_sun_later": "Sol plus nät kostar inte mindre nu än att ladda senare, så bilen väntar.",
+    "why_reason_charger_thin_sun_peak": "Huset är vid sin effektgräns, så bilen laddar inte på sol plus nät nu.",
+    "why_reason_charger_thin_sun_unknown": "SEM kan inte läsa ett pris eller prognosen, så bilen laddar inte på sol plus nät nu.",
+    "why_reason_charger_thin_sun_sun_later": "Senare i dag kommer mer sol som laddar bilen, så den väntar."
   },
   "zh": {
     "/year": "/年",
@@ -41325,6 +41415,12 @@
     "next_bar_left": "已充 {have}，至少 {min} · 还差 {left}",
     "next_bar_car_full": "车已充满 · {have} / 至少 {min}",
     "next_bar_done": "已充 {have}，至少 {min} · 已达到",
-    "next_batt_help_used_when": "当充电桩允许电池协助时适用。"
+    "next_batt_help_used_when": "当充电桩允许电池协助时适用。",
+    "why_reason_charger_thin_sun_battery": "家用电池正在用阳光充电，所以车辆现在不用阳光加电网充电。",
+    "why_reason_charger_thin_sun_battery_pays": "家用电池可以承担这次充电的一部分，所以车辆现在不用阳光加电网充电。",
+    "why_reason_charger_thin_sun_later": "现在用阳光加电网并不比之后充电更便宜，所以车辆等待。",
+    "why_reason_charger_thin_sun_peak": "家里的用电已到功率上限，所以车辆现在不用阳光加电网充电。",
+    "why_reason_charger_thin_sun_unknown": "SEM 无法读取价格或预报，所以车辆现在不用阳光加电网充电。",
+    "why_reason_charger_thin_sun_sun_later": "今天晚些时候阳光更多，会给车辆充电，所以车辆等待。"
   }
 }
