@@ -355,8 +355,17 @@ def _at(slot, *hours):
 def test_the_real_plan_shows_the_house_on_the_grid_in_kept_hours(freeze_targets):
     """``_shadow_energy_plan`` end to end: with the switch on, the published
     02:00 – 04:00 slots carry no battery mark and the house is on the grid;
-    the other hours keep the mark."""
-    on = _real_plan(True)
+    the other hours keep the mark.
+
+    The plan runs from "now" to the night's end, so the clock is pinned to
+    an evening: run after 04:00 the 02:00 – 04:00 hours are already past and
+    the test found no cheap slot (it failed in the morning, passed at night).
+    """
+    from freezegun import freeze_time
+
+    with freeze_time(T0.replace(hour=20)):
+        on = _real_plan(True)
+        off = _real_plan(False)
     cheap = [s for s in on["slots"] if _at(s, 2, 3)]
     dear = [s for s in on["slots"] if not _at(s, 2, 3)]
     assert cheap and dear
@@ -364,7 +373,6 @@ def test_the_real_plan_shows_the_house_on_the_grid_in_kept_hours(freeze_targets)
     assert all(s["home_grid_w"] > 0 for s in cheap)
     assert all(s.get("batt") for s in dear)
     # the switch off: the same night marks every hour
-    off = _real_plan(False)
     assert all(s.get("batt") for s in off["slots"])
 
 
