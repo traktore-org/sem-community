@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+- 📝 **The thin-sun reason says "cover", not "pay"** (#1440). "The house battery can cover part of this charge", in all 16 languages.
+
 - 🐛 **The car says why it waits while the plan shows sun plus grid** (#1440). A price missing for a moment no longer stops it.
 
 # [2.3.0-beta.30] — 27.11.2026
